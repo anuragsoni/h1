@@ -1,0 +1,6 @@
+(library
+ (name h1_parser)
+ (public_name h1.parser)
+ (preprocess
+  (pps ppx_sexp_conv))
+ (libraries bigstringaf sexplib0))
