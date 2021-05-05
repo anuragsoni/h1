@@ -91,7 +91,7 @@ let ( and+ ) a b =
 
 let with_eof source on_err on_succ res =
   if Source.length source < 2 then on_err Partial
-  else if Bigstringaf.memcmp_string source.buffer source.off "\r\n" 0 2 = 0 then (
+  else if Bigstringaf.unsafe_memcmp_string source.buffer source.off "\r\n" 0 2 = 0 then (
     Source.advance source 2;
     on_succ res)
   else on_err (Failure "Expected eof")
@@ -110,7 +110,7 @@ let token =
 let version =
   let run source on_err on_succ =
     if Source.length source < 8 then on_err Partial
-    else if Bigstringaf.memcmp_string source.buffer source.off "HTTP/1." 0 7 = 0
+    else if Bigstringaf.unsafe_memcmp_string source.buffer source.off "HTTP/1." 0 7 = 0
     then (
       Source.advance source 7;
       match Source.get source 0 with

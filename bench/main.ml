@@ -29,4 +29,5 @@ let tests =
   ]
 
 let () =
+  Memtrace.trace_if_requested ();
   Command.run (Bench.make_command tests)
