@@ -23,7 +23,7 @@ open Core_bench
 let tests =
   [
     Bench.Test.create ~name:"H1 parse single req" (fun () ->
-        match H1_parser.(parse request buf) with
+        match H1_parser.parse_request buf with
         | Error e -> assert false
         | Ok _ -> ());
   ]
