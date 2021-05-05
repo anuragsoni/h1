@@ -169,4 +169,4 @@ let request =
 
 let parse p buf =
   let source = Source.of_bigstring buf in
-  p.run source (fun e -> Error e) (fun v -> Ok v)
+  p.run source (fun e -> Error e) (fun v -> Ok ( v, Source.consumed source ))
