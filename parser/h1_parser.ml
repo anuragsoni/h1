@@ -71,7 +71,7 @@ end
 
 type err = Partial | Failure of string [@@deriving sexp]
 
-type 'a cps = { run : 'r. Source.t -> (err -> 'r) -> ('a -> 'r) -> 'r }
+type 'a parser = { run : 'r. Source.t -> (err -> 'r) -> ('a -> 'r) -> 'r }
 [@@unboxed]
 
 let ( let+ ) t f =
