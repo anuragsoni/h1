@@ -1,5 +1,11 @@
 open Sexplib0.Sexp_conv
 
+(* TODO: Remove this if https://github.com/inhabitedtype/bigstringaf/pulls gets
+   merged. *)
+external unsafe_memchr : Bigstringaf.t -> int -> char -> int -> int
+  = "bigstringaf_memchr"
+  [@@noalloc]
+
 module Source = struct
   type t = {
     buffer : (Bigstringaf.t[@sexp.opaque]);
@@ -57,6 +63,10 @@ module Source = struct
     Bigstringaf.substring t.buffer ~off:(t.off + off) ~len
 
   let consumed t = t.off - t.min_off
+
+  let index t ch =
+    let res = unsafe_memchr t.buffer t.off ch (length t) in
+    if res = -1 then -1 else res - t.off
 end
 
 type err = Partial | Failure of string [@@deriving sexp]
