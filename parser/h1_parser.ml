@@ -1,5 +1,11 @@
 open Sexplib0.Sexp_conv
 
+(* TODO: Remove this if https://github.com/inhabitedtype/bigstringaf/pulls gets
+   merged. *)
+external unsafe_memchr : Bigstringaf.t -> int -> char -> int -> int
+  = "bigstringaf_memchr"
+  [@@noalloc]
+
 module Source = struct
   type t = {
     buffer : (Bigstringaf.t[@sexp.opaque]);
@@ -57,12 +63,18 @@ module Source = struct
     Bigstringaf.substring t.buffer ~off:(t.off + off) ~len
 
   let consumed t = t.off - t.min_off
+
+  let index t ch =
+    let res = unsafe_memchr t.buffer t.off ch (length t) in
+    if res = -1 then -1 else res - t.off
 end
 
 type err = Partial | Failure of string [@@deriving sexp]
 
-type 'a cps = { run : 'r. Source.t -> (err -> 'r) -> ('a -> 'r) -> 'r }
+type 'a parser = { run : 'r. Source.t -> (err -> 'r) -> ('a -> 'r) -> 'r }
 [@@unboxed]
+
+type http_version = Http_1_0 | Http_1_1 [@@deriving sexp]
 
 let ( let+ ) t f =
   {
@@ -78,3 +90,91 @@ let ( and+ ) a b =
         a.run source on_err (fun res_a ->
             b.run source on_err (fun res_b -> on_succ (res_a, res_b))));
   }
+
+let with_eof source on_err on_succ res =
+  if Source.length source < 2 then on_err Partial
+  else if
+    Bigstringaf.unsafe_memcmp_string source.buffer source.off "\r\n" 0 2 = 0
+  then (
+    Source.advance source 2;
+    on_succ res)
+  else on_err (Failure "Expected eof")
+
+let token =
+  let run source on_err on_succ =
+    let pos = Source.index source ' ' in
+    if pos = -1 then on_err Partial
+    else
+      let res = Source.substring source ~off:0 ~len:pos in
+      Source.advance source (pos + 1);
+      on_succ res
+  in
+  { run }
+
+let version =
+  let run source on_err on_succ =
+    if Source.length source < 8 then on_err Partial
+    else if
+      Bigstringaf.unsafe_memcmp_string source.buffer source.off "HTTP/1." 0 7
+      = 0
+    then (
+      Source.advance source 7;
+      match Source.get source 0 with
+      | '0' ->
+          Source.advance source 1;
+          with_eof source on_err on_succ Http_1_0
+      | '1' ->
+          Source.advance source 1;
+          with_eof source on_err on_succ Http_1_1
+      | _ -> on_err (Failure "Invalid http version number"))
+    else on_err (Failure "Invalid http version header")
+  in
+  { run }
+
+let header =
+  let run source on_err on_succ =
+    let len = Source.length source in
+    if len > 0 && Source.get source 0 = '\r' then
+      with_eof source on_err on_succ None
+    else
+      let pos = Source.index source ':' in
+      if pos = -1 then on_err Partial
+      else
+        let key = Source.substring source ~off:0 ~len:pos in
+        Source.advance source (pos + 1);
+        while Source.length source > 0 && Source.get source 0 = ' ' do
+          Source.advance source 1
+        done;
+        let pos = Source.index source '\r' in
+        if pos = -1 then on_err Partial
+        else
+          let v = Source.substring source ~off:0 ~len:pos in
+          Source.advance source pos;
+          with_eof source on_err on_succ (Some (key, v))
+  in
+  { run }
+
+let headers =
+  let parse_header source =
+    header.run source (fun e -> Error e) (fun v -> Ok v)
+  in
+  let run source on_err on_succ =
+    let rec loop acc =
+      match parse_header source with
+      | Error e -> on_err e
+      | Ok None -> on_succ acc
+      | Ok (Some v) -> loop (v :: acc)
+    in
+    loop []
+  in
+  { run }
+
+let request =
+  let+ meth = token and+ uri = token and+ v = version and+ headers = headers in
+  (meth, uri, v, headers)
+
+let parse_request buf =
+  let source = Source.of_bigstring buf in
+  request.run source
+    (fun e -> Error e)
+    (fun v -> Ok (v, Source.consumed source))
