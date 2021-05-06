@@ -9,4 +9,6 @@
  (depends
   bigstringaf
   (ocaml
-   (>= 4.11.0))))
+   (>= 4.11.0))
+  sexplib0
+  ppx_sexp_conv))

@@ -4,6 +4,8 @@ depends: [
   "dune" {>= "2.8"}
   "bigstringaf"
   "ocaml" {>= "4.11.0"}
+  "sexplib0"
+  "ppx_sexp_conv"
   "odoc" {with-doc}
 ]
 build: [
