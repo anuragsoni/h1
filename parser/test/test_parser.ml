@@ -95,3 +95,31 @@ let%expect_test "Rejects any http version that isn't 1.0 or 1.1" =
   let res = H1_parser.parse_request ~off:0 ~len:50 buf |> Result.error in
   printf !"%{sexp: H1_parser.error option}" res;
   [%expect {| ((Msg "Invalid http version number 1.4")) |}]
+
+let%expect_test "Parse request and report offset" =
+  let buf =
+    "POST / HTTP/1.1\r\n\
+     Host: localhost:8080\r\n\
+     User-Agent: curl/7.64.1\r\n\
+     Accept: */*\r\n\
+     Content-Length: 6\r\n\
+     Content-Type: application/x-www-form-urlencoded\r\n\
+     \r\n\
+     foobar"
+  in
+  let v =
+    H1_parser.parse_request
+      (Bigstringaf.of_string buf ~off:0 ~len:(String.length buf))
+    |> Result.ok
+  in
+  let (req, count) = Option.value_exn v in
+  printf !"%{sexp: (H1_parser.request)}" (req);
+  [%expect{|
+    ((meth POST) (path /) (version Http_1_1)
+     (headers
+      ((Content-Type application/x-www-form-urlencoded) (Content-Length 6)
+       (Accept */*) (User-Agent curl/7.64.1) (Host localhost:8080)))) |}];
+  printf "%d\n" count;
+  [%expect{| 147 |}];
+  print_endline (String.sub buf ~pos:count ~len:(String.length buf - count));
+  [%expect {| foobar |}]
