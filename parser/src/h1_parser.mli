@@ -6,3 +6,6 @@ val parse_request :
   ?len:int ->
   Bigstringaf.t ->
   ((string * string * http_version * (string * string) list) * int, err) result
+(** Attempts to parse a buffer into a HTTP request. If successful, it returns
+    the parsed request and an offset value that indicates the starting point of
+    unconsumed content left in the buffer. *)
