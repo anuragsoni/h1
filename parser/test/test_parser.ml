@@ -84,7 +84,7 @@ let%expect_test "Can parse starting at an offset within a buffer" =
 let%expect_test "Informs the caller if the buffer contains partial request" =
   let buf = Bigstringaf.of_string ~off:0 ~len:(String.length req) req in
   let res = H1_parser.parse_request ~off:0 ~len:50 buf |> Result.error in
-  printf !"%{sexp: H1_parser.err option}" res;
+  printf !"%{sexp: H1_parser.error option}" res;
   [%expect {| (Partial) |}]
 
 let%expect_test "Rejects any http version that isn't 1.0 or 1.1" =
@@ -93,5 +93,5 @@ let%expect_test "Rejects any http version that isn't 1.0 or 1.1" =
   in
   let buf = Bigstringaf.of_string req ~off:0 ~len:(String.length req) in
   let res = H1_parser.parse_request ~off:0 ~len:50 buf |> Result.error in
-  printf !"%{sexp: H1_parser.err option}" res;
-  [%expect {| ((Failure "Invalid http version number")) |}]
+  printf !"%{sexp: H1_parser.error option}" res;
+  [%expect {| ((Msg "Invalid http version number 1.4")) |}]

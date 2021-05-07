@@ -69,9 +69,9 @@ module Source = struct
     if res = -1 then -1 else res - t.off
 end
 
-type err = Partial | Failure of string [@@deriving sexp]
+type error = Msg of string | Partial [@@deriving sexp]
 
-type 'a parser = { run : 'r. Source.t -> (err -> 'r) -> ('a -> 'r) -> 'r }
+type 'a parser = { run : 'r. Source.t -> (error -> 'r) -> ('a -> 'r) -> 'r }
 [@@unboxed]
 
 type http_version = Http_1_0 | Http_1_1 [@@deriving sexp]
@@ -98,7 +98,7 @@ let with_eof source on_err on_succ res =
   then (
     Source.advance source 2;
     on_succ res)
-  else on_err (Failure "Expected eof")
+  else on_err (Msg "Expected eof")
 
 let token =
   let run source on_err on_succ =
@@ -126,8 +126,8 @@ let version =
       | '1' ->
           Source.advance source 1;
           with_eof source on_err on_succ Http_1_1
-      | _ -> on_err (Failure "Invalid http version number"))
-    else on_err (Failure "Invalid http version header")
+      | c -> on_err (Msg (Printf.sprintf "Invalid http version number 1.%c" c)))
+    else on_err (Msg "Invalid http version header")
   in
   { run }
 
