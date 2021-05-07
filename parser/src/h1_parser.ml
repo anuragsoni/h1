@@ -46,7 +46,7 @@ module Source = struct
     t.off <- t.off + count
 
   let length t = t.upper_bound - t.off
-  let to_string t = Bigstringaf.substring t.buffer ~off:t.off ~len:(length t)
+  (* let to_string t = Bigstringaf.substring t.buffer ~off:t.off ~len:(length t) *)
 
   let substring t ~off ~len =
     if

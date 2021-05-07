@@ -11,4 +11,8 @@
   (ocaml
    (>= 4.11.0))
   sexplib0
-  ppx_sexp_conv))
+  ppx_sexp_conv
+  (ppx_expect :with-test)
+  (base :with-test)
+  (stdio :with-test)
+  (ppx_custom_printf :with-test)))

@@ -27,7 +27,7 @@ let tests =
   [
     Bench.Test.create ~name:"H1 (httparse example)" (fun () ->
         match H1_parser.parse_request buf with
-        | Error e -> assert false
+        | Error _ -> assert false
         | Ok _ -> ());
   ]
 

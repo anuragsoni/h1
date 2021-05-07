@@ -1,0 +1,6 @@
+(library
+ (name h1_parser_tests)
+ (inline_tests)
+ (preprocess
+  (pps ppx_sexp_conv ppx_expect ppx_custom_printf))
+ (libraries h1.parser base sexplib0 stdio))
