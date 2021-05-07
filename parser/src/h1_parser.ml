@@ -169,9 +169,17 @@ let headers =
   in
   { run }
 
+type request = {
+  meth : string;
+  path : string;
+  version : http_version;
+  headers : (string * string) list;
+}
+[@@deriving sexp]
+
 let request =
-  let+ meth = token and+ uri = token and+ v = version and+ headers = headers in
-  (meth, uri, v, headers)
+  let+ meth = token and+ path = token and+ v = version and+ headers = headers in
+  { meth; path; version = v; headers }
 
 let parse_request ?off ?len buf =
   let source = Source.of_bigstring ?off ?len buf in

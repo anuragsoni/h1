@@ -1,21 +1,6 @@
 open Base
 open Stdio
 
-module Req = struct
-  type http_version = H1_parser.http_version [@@deriving sexp]
-
-  type t = {
-    meth : string;
-    resource : string;
-    version : http_version;
-    headers : (string * string) list;
-  }
-  [@@deriving sexp]
-
-  let of_parse_result ((meth, resource, version, headers), count) =
-    ({ meth; resource; version; headers }, count)
-end
-
 let req =
   "GET /wp-content/uploads/2010/03/hello-kitty-darth-vader-pink.jpg HTTP/1.1\r\n\
    Host: www.kittyhell.com\r\n\
@@ -34,12 +19,12 @@ let req =
 
 let%expect_test "Can parse single request" =
   let buf = Bigstringaf.of_string ~off:0 ~len:(String.length req) req in
-  let res = H1_parser.parse_request buf |> Result.map ~f:Req.of_parse_result in
-  printf !"%{sexp: ((Req.t * int)) option}" (Result.ok res);
+  let res = H1_parser.parse_request buf in
+  printf !"%{sexp: ((H1_parser.request * int)) option}" (Result.ok res);
   [%expect
     {|
     ((((meth GET)
-       (resource /wp-content/uploads/2010/03/hello-kitty-darth-vader-pink.jpg)
+       (path /wp-content/uploads/2010/03/hello-kitty-darth-vader-pink.jpg)
        (version Http_1_1)
        (headers
         ((Cookie
@@ -82,13 +67,11 @@ let%expect_test "Can parse starting at an offset within a buffer" =
       ~len:(String.length more_requests)
       more_requests
   in
-  let res =
-    H1_parser.parse_request ~off:304 buf |> Result.map ~f:Req.of_parse_result
-  in
-  printf !"%{sexp: ((Req.t * int)) option}" (Result.ok res);
+  let res = H1_parser.parse_request ~off:304 buf in
+  printf !"%{sexp: ((H1_parser.request * int)) option}" (Result.ok res);
   [%expect
     {|
-    ((((meth GET) (resource /reddit.v_EZwRzV-Ns.css) (version Http_1_1)
+    ((((meth GET) (path /reddit.v_EZwRzV-Ns.css) (version Http_1_1)
        (headers
         ((Referer http://www.reddit.com/) (Connection keep-alive)
          (Accept-Encoding "gzip, deflate") (Accept-Language "en-us,en;q=0.5")
