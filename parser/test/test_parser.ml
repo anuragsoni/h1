@@ -124,3 +124,22 @@ let%expect_test "Parse request and report offset" =
   [%expect {| 147 |}];
   print_endline (String.sub buf ~pos:count ~len:(String.length buf - count));
   [%expect {| foobar |}]
+
+open Base_quickcheck
+
+let%test_unit "parse_chunk_length" =
+  Test.run_exn
+    (module struct
+      type t = int64 [@@deriving quickcheck, sexp_of]
+    end)
+    ~f:(fun num ->
+      let payload =
+        let s = Printf.sprintf "%Lx\r\n" num in
+        Bigstringaf.of_string ~off:0 ~len:(String.length s) s
+      in
+      match H1_parser.parse_chunk_length payload with
+      | Ok res ->
+          [%test_eq: int64 * int] res
+            (num, String.length (Printf.sprintf "%Lx" num) + 2)
+      | Error Partial -> assert false
+      | Error (Msg _) -> ())

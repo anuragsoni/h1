@@ -169,6 +169,37 @@ let headers =
   in
   { run }
 
+let chunk_length =
+  let run source on_err on_succ =
+    let ( lsl ) = Int64.shift_left in
+    let ( lor ) = Int64.logor in
+
+    let rec loop count chunk_length =
+      if Source.length source = 0 then on_err Partial
+      else if count = 16 then on_err (Msg "Chunk size is too large")
+      else
+        match Source.get source 0 with
+        | '\r' ->
+            with_eof source on_err on_succ chunk_length
+        | '0' .. '9' as ch ->
+            let curr = Int64.of_int (Char.code ch - Char.code '0') in
+            Source.advance source 1;
+            loop (count + 1) ((chunk_length lsl 4) lor curr)
+        | 'a' .. 'f' as ch ->
+            let curr = Int64.of_int (Char.code ch - Char.code 'a' + 10) in
+            Source.advance source 1;
+            loop (count + 1) ((chunk_length lsl 4) lor curr)
+        | 'A' .. 'F' as ch ->
+            let curr = Int64.of_int (Char.code ch - Char.code 'A' + 10) in
+            Source.advance source 1;
+            loop (count + 1) ((chunk_length lsl 4) lor curr)
+        | ch -> on_err (Msg (Printf.sprintf "Invalid chunk character: %C" ch))
+    in
+
+    loop 0 0L
+  in
+  { run }
+
 type request = {
   meth : string;
   path : string;
@@ -187,3 +218,4 @@ let run_parser ?off ?len buf p =
 
 let parse_request ?off ?len buf = run_parser ?off ?len buf request
 let parse_headers ?off ?len buf = run_parser ?off ?len buf headers
+let parse_chunk_length ?off ?len buf = run_parser ?off ?len buf chunk_length

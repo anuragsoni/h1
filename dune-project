@@ -15,4 +15,6 @@
   (ppx_expect :with-test)
   (base :with-test)
   (stdio :with-test)
-  (ppx_custom_printf :with-test)))
+  (ppx_custom_printf :with-test)
+  (base_quickcheck :with-test)
+  (ppx_assert :with-test)))

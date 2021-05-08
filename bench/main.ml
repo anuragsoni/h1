@@ -23,12 +23,24 @@ let buf = Bigstring.of_string req
 
 open Core_bench
 
+let hex_str = "fffffffe"
+
+let hex_chunk_size =
+  let s = Printf.sprintf "%s\r\n" hex_str in
+  Bigstring.of_string s
+
 let tests =
   [
     Bench.Test.create ~name:"H1 (httparse example)" (fun () ->
         match H1_parser.parse_request buf with
         | Error _ -> assert false
         | Ok _ -> ());
+    Bench.Test.create ~name:"Parse chunk size" (fun () ->
+        match H1_parser.parse_chunk_length hex_chunk_size with
+        | Error _ -> assert false
+        | Ok _ -> ());
+    Bench.Test.create ~name:"Parse hex number" (fun () ->
+        Int64.of_string ("0x" ^ hex_str));
   ]
 
 let () =
