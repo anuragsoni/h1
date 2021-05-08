@@ -143,3 +143,58 @@ let%test_unit "parse_chunk_length" =
             (num, String.length (Printf.sprintf "%Lx" num) + 2)
       | Error Partial -> assert false
       | Error (Msg _) -> ())
+
+let%test_unit "chunk length parser works with lowercase and uppercase hex \
+               digits" =
+  let run_test num str =
+    let buf = Bigstringaf.of_string ~off:0 ~len:(String.length str) str in
+    match H1_parser.parse_chunk_length buf with
+    | Ok res ->
+        [%test_eq: int64 * int] res
+          (num, String.length (Printf.sprintf "%Lx" num) + 2)
+    | Error Partial -> assert false
+    | Error (Msg _) -> ()
+  in
+  Test.run_exn
+    (module struct
+      type t = int64 [@@deriving quickcheck, sexp_of]
+    end)
+    ~f:(fun num ->
+      let payload = Printf.sprintf "%Lx\r\n" num in
+      run_test num (String.uppercase payload);
+      run_test num (String.lowercase payload))
+
+let%expect_test "chunk length parser" =
+  let run_test str =
+    let buf = Bigstringaf.of_string ~off:0 ~len:(String.length str) str in
+    match H1_parser.parse_chunk_length buf with
+    | Ok (len, off) -> printf "Chunk length: %Ld, offset: %d\n" len off
+    | Error Partial -> print_endline "Partial"
+    | Error (Msg m) -> print_endline m
+  in
+  run_test "ab2\r\n";
+  [%expect {| Chunk length: 2738, offset: 5 |}];
+  run_test "4511ab\r\n";
+  (* We will try to use the same chunk length, but this time with a chunk
+     extension. This should not result in any change in our output. *)
+  run_test "4511ab  ; a\r\n";
+  run_test "4511ab; now in extension\r\n";
+  run_test "4511ab a ; now in extension\r\n";
+  [%expect
+    {|
+    Chunk length: 4526507, offset: 8
+    Chunk length: 4526507, offset: 13
+    Chunk length: 4526507, offset: 26
+    Invalid chunk_length character 'a' |}];
+  run_test "111111111111111\r\n";
+  [%expect {| Chunk length: 76861433640456465, offset: 17 |}];
+  run_test "1111111111111111\r\n";
+  [%expect {| Chunk size is too large |}];
+  run_test "abc\r12";
+  [%expect {| Expected_newline |}];
+  run_test "abc\n12";
+  [%expect {| Invalid chunk_length character '\n' |}];
+  run_test "121";
+  [%expect {| Partial |}];
+  run_test "121\r";
+  [%expect {| Partial |}]

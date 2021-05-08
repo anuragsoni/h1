@@ -179,11 +179,15 @@ let chunk_length =
     let state = ref `Ok in
     let count = ref 0 in
 
+    let processing_chunk = ref true in
+
+    let in_chunk_extension = ref false in
+
     while not !stop do
       if Source.length source = 0 then (
         stop := true;
         state := `Partial)
-      else if !count = 16 then (
+      else if !count = 16 && not !in_chunk_extension then (
         stop := true;
         state := `Chunk_too_big)
       else
@@ -191,15 +195,22 @@ let chunk_length =
         Source.advance source 1;
         incr count;
         match ch with
-        | '0' .. '9' as ch ->
+        | '0' .. '9' as ch when !processing_chunk ->
             let curr = Int64.of_int (Char.code ch - Char.code '0') in
             length := (!length lsl 4) lor curr
-        | 'a' .. 'f' as ch ->
+        | 'a' .. 'f' as ch when !processing_chunk ->
             let curr = Int64.of_int (Char.code ch - Char.code 'a' + 10) in
             length := (!length lsl 4) lor curr
-        | 'A' .. 'F' as ch ->
+        | 'A' .. 'F' as ch when !processing_chunk ->
             let curr = Int64.of_int (Char.code ch - Char.code 'A' + 10) in
             length := (!length lsl 4) lor curr
+        | ';' when not !in_chunk_extension ->
+            in_chunk_extension := true;
+            processing_chunk := false
+        | ('\t' | ' ') when !processing_chunk -> processing_chunk := false
+        | ('\t' | ' ') when (not !in_chunk_extension) && not !processing_chunk
+          ->
+            ()
         | '\r' ->
             if Source.length source = 0 then (
               stop := true;
@@ -210,6 +221,18 @@ let chunk_length =
             else (
               stop := true;
               state := `Expected_newline)
+        | _ when !in_chunk_extension ->
+            (* Chunk extensions aren't very common, see:
+               https://tools.ietf.org/html/rfc7230#section-4.1.1
+
+               Chunk extensions aren't pre-defined, and they are specific to
+               invidividual connections. In the future we might surface these to
+               the user somehow, but for now we will ignore any extensions.
+
+               TODO: Should there be any limit on the size of chunk extensions
+               we parse? We might want to error if a request contains really
+               large chunk extensions. *)
+            ()
         | ch ->
             stop := true;
             state := `Invalid_char ch
