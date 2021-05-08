@@ -181,8 +181,9 @@ let request =
   let+ meth = token and+ path = token and+ v = version and+ headers = headers in
   { meth; path; version = v; headers }
 
-let parse_request ?off ?len buf =
+let run_parser ?off ?len buf p =
   let source = Source.of_bigstring ?off ?len buf in
-  request.run source
-    (fun e -> Error e)
-    (fun v -> Ok (v, Source.consumed source))
+  p.run source (fun e -> Error e) (fun v -> Ok (v, Source.consumed source))
+
+let parse_request ?off ?len buf = run_parser ?off ?len buf request
+let parse_headers ?off ?len buf = run_parser ?off ?len buf headers

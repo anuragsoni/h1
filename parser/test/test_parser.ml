@@ -112,14 +112,15 @@ let%expect_test "Parse request and report offset" =
       (Bigstringaf.of_string buf ~off:0 ~len:(String.length buf))
     |> Result.ok
   in
-  let (req, count) = Option.value_exn v in
-  printf !"%{sexp: (H1_parser.request)}" (req);
-  [%expect{|
+  let req, count = Option.value_exn v in
+  printf !"%{sexp: (H1_parser.request)}" req;
+  [%expect
+    {|
     ((meth POST) (path /) (version Http_1_1)
      (headers
       ((Content-Type application/x-www-form-urlencoded) (Content-Length 6)
        (Accept */*) (User-Agent curl/7.64.1) (Host localhost:8080)))) |}];
   printf "%d\n" count;
-  [%expect{| 147 |}];
+  [%expect {| 147 |}];
   print_endline (String.sub buf ~pos:count ~len:(String.length buf - count));
   [%expect {| foobar |}]

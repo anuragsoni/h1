@@ -9,6 +9,12 @@ type request = {
 }
 [@@deriving sexp]
 
+val parse_headers :
+  ?off:int ->
+  ?len:int ->
+  Bigstringaf.t ->
+  ((string * string) list * int, error) result
+
 val parse_request :
   ?off:int -> ?len:int -> Bigstringaf.t -> (request * int, error) result
 (** Attempts to parse a buffer into a HTTP request. If successful, it returns
