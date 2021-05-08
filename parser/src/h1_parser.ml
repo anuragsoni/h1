@@ -174,30 +174,55 @@ let chunk_length =
     let ( lsl ) = Int64.shift_left in
     let ( lor ) = Int64.logor in
 
-    let rec loop count chunk_length =
-      if Source.length source = 0 then on_err Partial
-      else if count = 16 then on_err (Msg "Chunk size is too large")
+    let length = ref 0L in
+    let stop = ref false in
+    let state = ref `Ok in
+    let count = ref 0 in
+
+    while not !stop do
+      if Source.length source = 0 then (
+        stop := true;
+        state := `Partial)
+      else if !count = 16 then (
+        stop := true;
+        state := `Chunk_too_big)
       else
-        match Source.get source 0 with
-        | '\r' ->
-            with_eof source on_err on_succ chunk_length
+        let ch = Source.get source 0 in
+        Source.advance source 1;
+        incr count;
+        match ch with
         | '0' .. '9' as ch ->
             let curr = Int64.of_int (Char.code ch - Char.code '0') in
-            Source.advance source 1;
-            loop (count + 1) ((chunk_length lsl 4) lor curr)
+            length := (!length lsl 4) lor curr
         | 'a' .. 'f' as ch ->
             let curr = Int64.of_int (Char.code ch - Char.code 'a' + 10) in
-            Source.advance source 1;
-            loop (count + 1) ((chunk_length lsl 4) lor curr)
+            length := (!length lsl 4) lor curr
         | 'A' .. 'F' as ch ->
             let curr = Int64.of_int (Char.code ch - Char.code 'A' + 10) in
-            Source.advance source 1;
-            loop (count + 1) ((chunk_length lsl 4) lor curr)
-        | ch -> on_err (Msg (Printf.sprintf "Invalid chunk character: %C" ch))
-    in
-
-    loop 0 0L
+            length := (!length lsl 4) lor curr
+        | '\r' ->
+            if Source.length source = 0 then (
+              stop := true;
+              state := `Partial)
+            else if Source.get source 0 = '\n' then (
+              Source.advance source 1;
+              stop := true)
+            else (
+              stop := true;
+              state := `Expected_newline)
+        | ch ->
+            stop := true;
+            state := `Invalid_char ch
+    done;
+    match !state with
+    | `Ok -> on_succ !length
+    | `Partial -> on_err Partial
+    | `Expected_newline -> on_err (Msg "Expected_newline")
+    | `Chunk_too_big -> on_err (Msg "Chunk size is too large")
+    | `Invalid_char ch ->
+        on_err (Msg (Printf.sprintf "Invalid chunk_length character %C" ch))
   in
+
   { run }
 
 type request = {
