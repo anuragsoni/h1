@@ -131,39 +131,32 @@ let version =
   in
   { run }
 
-let header =
-  let run source on_err on_succ =
-    let len = Source.length source in
-    if len > 0 && Source.get source 0 = '\r' then
-      with_eof source on_err on_succ None
+let parse_header source =
+  let pos = Source.index source ':' in
+  if pos = -1 then Error Partial
+  else
+    let key = Source.substring source ~off:0 ~len:pos in
+    Source.advance source (pos + 1);
+    while Source.length source > 0 && Source.get source 0 = ' ' do
+      Source.advance source 1
+    done;
+    let pos = Source.index source '\r' in
+    if pos = -1 then Error Partial
     else
-      let pos = Source.index source ':' in
-      if pos = -1 then on_err Partial
-      else
-        let key = Source.substring source ~off:0 ~len:pos in
-        Source.advance source (pos + 1);
-        while Source.length source > 0 && Source.get source 0 = ' ' do
-          Source.advance source 1
-        done;
-        let pos = Source.index source '\r' in
-        if pos = -1 then on_err Partial
-        else
-          let v = Source.substring source ~off:0 ~len:pos in
-          Source.advance source pos;
-          with_eof source on_err on_succ (Some (key, v))
-  in
-  { run }
+      let v = Source.substring source ~off:0 ~len:pos in
+      Source.advance source pos;
+      with_eof source (fun e -> Error e) (fun v -> Ok v) (key, v)
 
 let headers =
-  let parse_header source =
-    header.run source (fun e -> Error e) (fun v -> Ok v)
-  in
   let run source on_err on_succ =
     let rec loop acc =
-      match parse_header source with
-      | Error e -> on_err e
-      | Ok None -> on_succ acc
-      | Ok (Some v) -> loop (v :: acc)
+      let len = Source.length source in
+      if len > 0 && Source.get source 0 = '\r' then
+        with_eof source on_err on_succ acc
+      else
+        match parse_header source with
+        | Error e -> on_err e
+        | Ok v -> loop (v :: acc)
     in
     loop []
   in
