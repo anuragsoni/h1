@@ -2,7 +2,7 @@ type error = Msg of string | Partial [@@deriving sexp]
 type http_version = Http_1_0 | Http_1_1 [@@deriving sexp]
 
 type request = {
-  meth : string;
+  meth : Meth.t;
   path : string;
   version : http_version;
   headers : (string * string) list;

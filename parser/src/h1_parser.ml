@@ -111,6 +111,15 @@ let token =
   in
   { run }
 
+let meth =
+  let run source on_err on_succ =
+    token.run source on_err (fun token ->
+        match Meth.of_string token with
+        | None -> on_err (Msg "Invalid http verb")
+        | Some m -> on_succ m)
+  in
+  { run }
+
 let version =
   let run source on_err on_succ =
     if Source.length source < 8 then on_err Partial
@@ -242,7 +251,7 @@ let chunk_length =
   { run }
 
 type request = {
-  meth : string;
+  meth : Meth.t;
   path : string;
   version : http_version;
   headers : (string * string) list;
@@ -250,7 +259,7 @@ type request = {
 [@@deriving sexp]
 
 let request =
-  let+ meth = token and+ path = token and+ v = version and+ headers = headers in
+  let+ meth = meth and+ path = token and+ v = version and+ headers = headers in
   { meth; path; version = v; headers }
 
 let run_parser ?off ?len buf p =
