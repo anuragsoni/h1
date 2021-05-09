@@ -152,7 +152,7 @@ let headers =
     let rec loop acc =
       let len = Source.length source in
       if len > 0 && Source.get source 0 = '\r' then
-        with_eof source on_err on_succ acc
+        with_eof source on_err on_succ (List.rev acc)
       else
         match parse_header source with
         | Error e -> on_err e

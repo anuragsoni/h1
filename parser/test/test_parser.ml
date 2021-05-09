@@ -27,17 +27,17 @@ let%expect_test "Can parse single request" =
        (path /wp-content/uploads/2010/03/hello-kitty-darth-vader-pink.jpg)
        (version Http_1_1)
        (headers
-        ((Cookie
-          "wp_ozh_wsa_visits=2; wp_ozh_wsa_visit_lasttime=xxxxxxxxxx; __utma=xxxxxxxxx.xxxxxxxxxx.xxxxxxxxxx.xxxxxxxxxx.xxxxxxxxxx.x; __utmz=xxxxxxxxx.xxxxxxxxxx.x.x.utmccn=(referral)|utmcsr=reader.livedoor.com|utmcct=/reader/|utmcmd=referral")
-         (Connection keep-alive) (Keep-Alive 115)
-         (Accept-Charset "Shift_JIS,utf-8;q=0.7,*;q=0.7")
-         (Accept-Encoding gzip,deflate)
-         (Accept-Language "ja,en-us;q=0.7,en;q=0.3")
-         (Accept
-          "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+        ((Host www.kittyhell.com)
          (User-Agent
           "Mozilla/5.0 (Macintosh; U; Intel Mac OS X 10.6; ja-JP-mac; rv:1.9.2.3) Gecko/20100401 Firefox/3.6.3 Pathtraq/0.9")
-         (Host www.kittyhell.com))))
+         (Accept
+          "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+         (Accept-Language "ja,en-us;q=0.7,en;q=0.3")
+         (Accept-Encoding gzip,deflate)
+         (Accept-Charset "Shift_JIS,utf-8;q=0.7,*;q=0.7") (Keep-Alive 115)
+         (Connection keep-alive)
+         (Cookie
+          "wp_ozh_wsa_visits=2; wp_ozh_wsa_visit_lasttime=xxxxxxxxxx; __utma=xxxxxxxxx.xxxxxxxxxx.xxxxxxxxxx.xxxxxxxxxx.xxxxxxxxxx.x; __utmz=xxxxxxxxx.xxxxxxxxxx.x.x.utmccn=(referral)|utmcsr=reader.livedoor.com|utmcct=/reader/|utmcmd=referral"))))
       703)) |}]
 
 let more_requests =
@@ -73,12 +73,12 @@ let%expect_test "Can parse starting at an offset within a buffer" =
     {|
     ((((meth GET) (path /reddit.v_EZwRzV-Ns.css) (version Http_1_1)
        (headers
-        ((Referer http://www.reddit.com/) (Connection keep-alive)
-         (Accept-Encoding "gzip, deflate") (Accept-Language "en-us,en;q=0.5")
-         (Accept "text/css,*/*;q=0.1")
+        ((Host www.redditstatic.com)
          (User-Agent
           "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.8; rv:15.0) Gecko/20100101 Firefox/15.0.1")
-         (Host www.redditstatic.com))))
+         (Accept "text/css,*/*;q=0.1") (Accept-Language "en-us,en;q=0.5")
+         (Accept-Encoding "gzip, deflate") (Connection keep-alive)
+         (Referer http://www.reddit.com/))))
       315)) |}]
 
 let%expect_test "Informs the caller if the buffer contains partial request" =
@@ -118,8 +118,8 @@ let%expect_test "Parse request and report offset" =
     {|
     ((meth POST) (path /) (version Http_1_1)
      (headers
-      ((Content-Type application/x-www-form-urlencoded) (Content-Length 6)
-       (Accept */*) (User-Agent curl/7.64.1) (Host localhost:8080)))) |}];
+      ((Host localhost:8080) (User-Agent curl/7.64.1) (Accept */*)
+       (Content-Length 6) (Content-Type application/x-www-form-urlencoded)))) |}];
   printf "%d\n" count;
   [%expect {| 147 |}];
   print_endline (String.sub buf ~pos:count ~len:(String.length buf - count));
