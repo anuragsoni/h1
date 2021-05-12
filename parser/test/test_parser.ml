@@ -20,7 +20,7 @@ let req =
 let%expect_test "Can parse single request" =
   let buf = Bigstringaf.of_string ~off:0 ~len:(String.length req) req in
   let res = H1_parser.parse_request buf in
-  printf !"%{sexp: ((H1_parser.request * int)) option}" (Result.ok res);
+  printf !"%{sexp: ((H1.Request.t * int)) option}" (Result.ok res);
   [%expect
     {|
     ((((meth GET)
@@ -68,7 +68,7 @@ let%expect_test "Can parse starting at an offset within a buffer" =
       more_requests
   in
   let res = H1_parser.parse_request ~off:304 buf in
-  printf !"%{sexp: ((H1_parser.request * int)) option}" (Result.ok res);
+  printf !"%{sexp: ((H1.Request.t * int)) option}" (Result.ok res);
   [%expect
     {|
     ((((meth GET) (path /reddit.v_EZwRzV-Ns.css) (version Http_1_1)
@@ -113,7 +113,7 @@ let%expect_test "Parse request and report offset" =
     |> Result.ok
   in
   let req, count = Option.value_exn v in
-  printf !"%{sexp: (H1_parser.request)}" req;
+  printf !"%{sexp: (H1.Request.t)}" req;
   [%expect
     {|
     ((meth POST) (path /) (version Http_1_1)
@@ -204,7 +204,7 @@ let%expect_test "Rejects headers with space before colon" =
     let buf = Bigstringaf.of_string ~off:0 ~len:(String.length str) str in
     match H1_parser.parse_request buf with
     | Ok (req, off) ->
-        printf !"Request: %{sexp: H1_parser.request} offset: %d\n" req off
+        printf !"Request: %{sexp: H1.Request.t} offset: %d\n" req off
     | Error Partial -> print_endline "Partial"
     | Error (Msg m) -> print_endline m
   in

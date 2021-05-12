@@ -8,4 +8,4 @@
   (names h1_parser_stubs)
   (flags
    (:standard -Wall -Wextra -Wpedantic -O3)))
- (libraries bigstringaf sexplib0))
+ (libraries bigstringaf h1 sexplib0))
