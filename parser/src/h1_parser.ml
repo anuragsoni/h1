@@ -46,9 +46,8 @@ module Source = struct
     t.off <- t.off + count
 
   let length t = t.upper_bound - t.off
-  (* let to_string t = Bigstringaf.substring t.buffer ~off:t.off ~len:(length t) *)
 
-  let substring t ~off ~len =
+  let to_string t ~off ~len =
     if
       off < 0
       || t.off + off >= t.upper_bound
@@ -105,7 +104,7 @@ let token =
     let pos = Source.index source ' ' in
     if pos = -1 then on_err Partial
     else
-      let res = Source.substring source ~off:0 ~len:pos in
+      let res = Source.to_string source ~off:0 ~len:pos in
       Source.advance source (pos + 1);
       on_succ res
   in
@@ -144,7 +143,7 @@ let parse_header source =
   let pos = Source.index source ':' in
   if pos = -1 then Error Partial
   else
-    let key = Source.substring source ~off:0 ~len:pos in
+    let key = Source.to_string source ~off:0 ~len:pos in
     Source.advance source (pos + 1);
     while Source.length source > 0 && Source.get source 0 = ' ' do
       Source.advance source 1
@@ -152,9 +151,9 @@ let parse_header source =
     let pos = Source.index source '\r' in
     if pos = -1 then Error Partial
     else
-      let v = Source.substring source ~off:0 ~len:pos in
+      let v = Source.to_string source ~off:0 ~len:pos in
       Source.advance source pos;
-      with_eof source (fun e -> Error e) (fun v -> Ok v) (key, v)
+      with_eof source (fun e -> Error e) (fun v -> Ok v) (key, String.trim v)
 
 let headers =
   let run source on_err on_succ =
