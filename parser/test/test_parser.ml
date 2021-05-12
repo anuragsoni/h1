@@ -198,3 +198,27 @@ let%expect_test "chunk length parser" =
   [%expect {| Partial |}];
   run_test "121\r";
   [%expect {| Partial |}]
+
+let%expect_test "Rejects headers with space before colon" =
+  let run_test str =
+    let buf = Bigstringaf.of_string ~off:0 ~len:(String.length str) str in
+    match H1_parser.parse_request buf with
+    | Ok (req, off) ->
+        printf !"Request: %{sexp: H1_parser.request} offset: %d\n" req off
+    | Error Partial -> print_endline "Partial"
+    | Error (Msg m) -> print_endline m
+  in
+  let req =
+    "GET / HTTP/1.1\r\nHost: www.kittyhell.com\r\nKeep-Alive: 115\r\n\r\n"
+  in
+  (* Can parse the request with proper headers *)
+  run_test req;
+  [%expect
+    {|
+    Request: ((meth GET) (path /) (version Http_1_1)
+     (headers ((Host www.kittyhell.com) (Keep-Alive 115)))) offset: 60 |}];
+  let req =
+    "GET / HTTP/1.1\r\nHost : www.kittyhell.com\r\nKeep-Alive: 115\r\n\r\n"
+  in
+  run_test req;
+  [%expect {| Invalid Header Key |}]

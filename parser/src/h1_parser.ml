@@ -66,6 +66,24 @@ module Source = struct
   let index t ch =
     let res = unsafe_memchr t.buffer t.off ch (length t) in
     if res = -1 then -1 else res - t.off
+
+  let for_all t ~off ~len ~f =
+    if
+      off < 0
+      || t.off + off >= t.upper_bound
+      || len < 0
+      || t.off + off + len > t.upper_bound
+    then
+      invalid_arg
+        (Format.asprintf
+           "H1_parser.Source.substring: Index out of bounds. source: %a, \
+            Requested off: %d, len: %d"
+           Sexplib0.Sexp.pp_mach (sexp_of_t t) off len);
+    let idx = ref off in
+    while !idx < len && f (get t !idx) do
+      incr idx
+    done;
+    if !idx = len then true else false
 end
 
 type error = Msg of string | Partial [@@deriving sexp]
@@ -98,6 +116,20 @@ let with_eof source on_err on_succ res =
     Source.advance source 2;
     on_succ res)
   else on_err (Msg "Expected eof")
+
+(* token = 1*tchar
+
+   tchar = "!" / "#" / "$" / "%" / "&" / "'" / "*" / "+" / "-" / "." / "^" / "_"
+   / "`" / "|" / "~" / DIGIT / ALPHA ; any VCHAR, except delimiters *)
+
+let is_tchar = function
+  | '0' .. '9'
+  | 'a' .. 'z'
+  | 'A' .. 'Z'
+  | '!' | '#' | '$' | '%' | '&' | '\'' | '*' | '+' | '-' | '.' | '^' | '_' | '`'
+  | '|' | '~' ->
+      true
+  | _ -> false
 
 let token =
   let run source on_err on_succ =
@@ -142,7 +174,7 @@ let version =
 let parse_header source =
   let pos = Source.index source ':' in
   if pos = -1 then Error Partial
-  else
+  else if Source.for_all source ~off:0 ~len:pos ~f:is_tchar then (
     let key = Source.to_string source ~off:0 ~len:pos in
     Source.advance source (pos + 1);
     while Source.length source > 0 && Source.get source 0 = ' ' do
@@ -153,7 +185,8 @@ let parse_header source =
     else
       let v = Source.to_string source ~off:0 ~len:pos in
       Source.advance source pos;
-      with_eof source (fun e -> Error e) (fun v -> Ok v) (key, String.trim v)
+      with_eof source (fun e -> Error e) (fun v -> Ok v) (key, String.trim v))
+  else Error (Msg "Invalid Header Key")
 
 let headers =
   let run source on_err on_succ =
