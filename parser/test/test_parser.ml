@@ -221,4 +221,9 @@ let%expect_test "Rejects headers with space before colon" =
     "GET / HTTP/1.1\r\nHost : www.kittyhell.com\r\nKeep-Alive: 115\r\n\r\n"
   in
   run_test req;
-  [%expect {| Invalid Header Key |}]
+  [%expect {| Invalid Header Key |}];
+  let req =
+    "GET / HTTP/1.1\r\n: www.kittyhell.com\r\nKeep-Alive: 115\r\n\r\n"
+  in
+  run_test req;
+  [%expect {| Invalid header: Empty header key |}]

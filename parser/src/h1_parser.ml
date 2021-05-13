@@ -172,6 +172,7 @@ let version =
 let parse_header source =
   let pos = Source.index source ':' in
   if pos = -1 then Error Partial
+  else if pos = 0 then Error (Msg "Invalid header: Empty header key")
   else if Source.for_all source ~off:0 ~len:pos ~f:is_tchar then (
     let key = Source.to_string source ~off:0 ~len:pos in
     Source.advance source (pos + 1);
