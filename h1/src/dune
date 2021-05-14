@@ -1,6 +1,2 @@
 (library
- (name h1)
- (public_name h1)
- (preprocess
-  (pps ppx_sexp_conv))
- (libraries base))
+  (public_name h1))

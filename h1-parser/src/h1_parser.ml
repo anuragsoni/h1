@@ -143,7 +143,7 @@ let token =
 let meth =
   let run source on_err on_succ =
     token.run source on_err (fun token ->
-        match H1.Meth.of_string token with
+        match H1_types.Meth.of_string token with
         | None -> on_err (Msg "Invalid http verb")
         | Some m -> on_succ m)
   in
@@ -160,10 +160,10 @@ let version =
       match Source.get source 0 with
       | '0' ->
           Source.advance source 1;
-          with_eof source on_err on_succ H1.Version.Http_1_0
+          with_eof source on_err on_succ H1_types.Version.Http_1_0
       | '1' ->
           Source.advance source 1;
-          with_eof source on_err on_succ H1.Version.Http_1_1
+          with_eof source on_err on_succ H1_types.Version.Http_1_1
       | c -> on_err (Msg (Printf.sprintf "Invalid http version number 1.%c" c)))
     else on_err (Msg "Invalid http version header")
   in
@@ -192,7 +192,7 @@ let headers =
     let rec loop acc =
       let len = Source.length source in
       if len > 0 && Source.get source 0 = '\r' then
-        with_eof source on_err on_succ (H1.Headers.of_list @@ List.rev acc)
+        with_eof source on_err on_succ (H1_types.Headers.of_list @@ List.rev acc)
       else
         match parse_header source with
         | Error e -> on_err e
@@ -283,7 +283,7 @@ let chunk_length =
 
 let request =
   let+ meth = meth and+ path = token and+ v = version and+ headers = headers in
-  H1.Request.create ~version:v ~path ~headers ~meth ()
+  H1_types.Request.create ~version:v ~path ~headers ~meth ()
 
 let run_parser ?off ?len buf p =
   let source = Source.of_bigstring ?off ?len buf in
