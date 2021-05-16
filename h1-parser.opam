@@ -5,7 +5,6 @@ depends: [
   "h1-types" {= version}
   "bigstringaf"
   "sexplib0"
-  "h1-types"
   "ppx_sexp_conv"
   "ppx_expect" {with-test}
   "base" {with-test}

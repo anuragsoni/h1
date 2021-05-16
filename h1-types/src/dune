@@ -3,4 +3,4 @@
  (public_name h1-types)
  (preprocess
   (pps ppx_sexp_conv))
- (libraries base))
+ (libraries sexplib0))

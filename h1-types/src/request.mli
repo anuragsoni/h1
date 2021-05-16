@@ -4,6 +4,6 @@ val create :
   ?version:Version.t ->
   ?headers:Headers.t ->
   meth:Meth.t ->
-  path:Base.string ->
+  path:string ->
   unit ->
   t
