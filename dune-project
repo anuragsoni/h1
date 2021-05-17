@@ -28,14 +28,13 @@
   (ppx_assert :with-test)))
 
 (package
- (name h1)
+ (name h1-lwt)
  (depends
-  bigstringaf
-  (ocaml
-   (>= 4.11.0))
-  sexplib0
   (h1-types
    (= :version))
   (h1-parser
    (= :version))
-  ppx_sexp_conv))
+  bigstringaf
+  lwt
+  sexplib0
+  lwt-dllist))

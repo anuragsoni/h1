@@ -283,7 +283,7 @@ let chunk_length =
 
 let request =
   let+ meth = meth and+ path = token and+ v = version and+ headers = headers in
-  H1_types.Request.create ~version:v ~path ~headers ~meth ()
+  H1_types.Request.create ~version:v ~headers meth path
 
 let run_parser ?off ?len buf p =
   let source = Source.of_bigstring ?off ?len buf in

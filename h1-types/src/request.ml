@@ -8,6 +8,5 @@ type t = {
 }
 [@@deriving sexp]
 
-let create ?(version = Version.Http_1_1) ?(headers = Headers.empty) ~meth ~path
-    () =
+let create ?(version = Version.Http_1_1) ?(headers = Headers.empty) meth path =
   { meth; path; version; headers }
