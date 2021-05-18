@@ -36,5 +36,5 @@
    (= :version))
   bigstringaf
   lwt
-  sexplib0
-  lwt-dllist))
+  faraday
+  sexplib0))

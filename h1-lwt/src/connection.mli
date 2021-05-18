@@ -6,7 +6,7 @@ type action = Need_data | Req of H1_types.Request.t | Paused | Close
 val create :
   read_buf_size:int ->
   write_buf_size:int ->
-  (Iovec.t Lwt_dllist.t -> int Lwt.t) ->
+  (Faraday.bigstring Faraday.iovec list -> int Lwt.t) ->
   t
 
 val feed_data :
