@@ -49,7 +49,7 @@ let write_response conn resp =
 let write conn msg =
   match msg with
   | `Response res -> write_response conn res
-  | `Data d -> Writer.schedule_bigstring d conn.writer
+  | `Data d -> Writer.schedule_bigstring conn.writer d
 
 let flushed conn = Writer.flushed conn.writer
 let write_all conn = Writer.write_all conn.writer
