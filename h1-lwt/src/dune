@@ -3,4 +3,4 @@
  (public_name h1-lwt)
  (preprocess
   (pps lwt_ppx ppx_sexp_conv))
- (libraries h1-types h1-parser lwt sexplib0 bigstringaf lwt-dllist))
+ (libraries h1-types h1-parser lwt sexplib0 bigstringaf faraday))
