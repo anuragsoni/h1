@@ -12,7 +12,7 @@ let create ~writev size =
 
 let pending t = Faraday.pending_bytes t.buf
 
-let schedule_bigstring ?pos ?len buf t =
+let schedule_bigstring t ?pos ?len buf =
   Faraday.schedule_bigstring t.buf ?off:pos ?len buf
 
 (* TODO: Do bounds check and grow buffer to make more space if needed *)
