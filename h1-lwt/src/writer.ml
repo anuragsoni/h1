@@ -8,16 +8,14 @@ type t = {
   mutable bytes_scheduled : int;
   mutable bytes_written : int;
   flushes : Flush.t Queue.t;
-  write : Iovec.t -> int Lwt.t;
 }
 
-let create ~write size =
+let create size =
   let buf = Bigbuffer.create size in
   {
     buf;
     closed = false;
     flushes = Queue.create ();
-    write;
     bytes_scheduled = 0;
     bytes_written = 0;
   }
@@ -59,13 +57,13 @@ let drop t count =
   t.bytes_written <- t.bytes_written + count;
   wakeup_flush_if_needed t
 
-let write_all t =
+let write_all ~write t =
   let rec aux t =
     let pending = pending t in
     if pending = 0 then Lwt.return_unit
     else
       let iovec = Bigbuffer.content_iovec t.buf in
-      let%lwt count = t.write iovec in
+      let%lwt count = write iovec in
       drop t count;
       if count = pending then Lwt.return_unit else aux t
   in

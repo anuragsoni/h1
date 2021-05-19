@@ -13,14 +13,15 @@ type action = Need_data | Req of Request.t | Paused | Close
 type t = {
   reader : Reader.t;
   writer : Writer.t;
+  write : Iovec.t -> int Lwt.t;
   mutable state : Server_state.t;
   mutable peer_state : Client_state.t;
 }
 
 let create ~read_buf_size ~write_buf_size write =
   let reader = Reader.create read_buf_size in
-  let writer = Writer.create ~write write_buf_size in
-  { reader; writer; state = Idle; peer_state = Idle }
+  let writer = Writer.create write_buf_size in
+  { reader; writer; state = Idle; peer_state = Idle; write }
 
 let feed_data ~f conn = Reader.fill ~f conn.reader
 
@@ -50,7 +51,7 @@ let write conn msg =
   | `Data d -> Writer.write_bigstring conn.writer d
 
 let flushed conn = Writer.flushed conn.writer
-let write_all conn = Writer.write_all conn.writer
+let write_all conn = Writer.write_all ~write:conn.write conn.writer
 
 let next_action conn =
   match conn.peer_state with
