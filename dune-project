@@ -33,4 +33,4 @@
    (= :version))
   bigstringaf
   lwt
-  faraday))
+  lwt-dllist))

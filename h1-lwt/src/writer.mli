@@ -1,6 +1,6 @@
 type t
 
-val create : writev:(Bigstringaf.t Faraday.iovec list -> int Lwt.t) -> int -> t
+val create : writev:(Iovec.t Lwt_dllist.t -> int Lwt.t) -> int -> t
 val write_string : t -> string -> unit
 val write_char : t -> char -> unit
 val schedule_bigstring : t -> ?pos:int -> ?len:int -> Bigstringaf.t -> unit

@@ -29,20 +29,22 @@ let reset t =
   t.peer_state <- Idle
 
 let write_response conn resp =
-  Writer.write_string conn.writer (Version.to_string @@ Response.version resp);
-  Writer.write_char conn.writer ' ';
-  Writer.write_string conn.writer (Status.to_string @@ Response.status resp);
-  Writer.write_char conn.writer ' ';
-  Writer.write_string conn.writer @@ Response.reason_phrase resp;
-  Writer.write_string conn.writer "\r\n";
+  let buf = Buffer.create 512 in
+  Buffer.add_string buf (Version.to_string @@ Response.version resp);
+  Buffer.add_char buf ' ';
+  Buffer.add_string buf (Status.to_string @@ Response.status resp);
+  Buffer.add_char buf ' ';
+  Buffer.add_string buf @@ Response.reason_phrase resp;
+  Buffer.add_string buf "\r\n";
   Headers.iteri
     ~f:(fun ~key ~data ->
-      Writer.write_string conn.writer key;
-      Writer.write_string conn.writer ": ";
-      Writer.write_string conn.writer data;
-      Writer.write_string conn.writer "\r\n")
+      Buffer.add_string buf key;
+      Buffer.add_string buf ": ";
+      Buffer.add_string buf data;
+      Buffer.add_string buf "\r\n")
     (Response.headers resp);
-  Writer.write_string conn.writer "\r\n"
+  Buffer.add_string buf "\r\n";
+  Writer.write_string conn.writer (Buffer.contents buf)
 
 let write conn msg =
   match msg with

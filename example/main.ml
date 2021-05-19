@@ -33,11 +33,20 @@ let text =
 
 let text = Bigstringaf.of_string text ~off:0 ~len:(String.length text)
 
+(* let writev sock iovecs = *)
+(*   let vecs = Lwt_unix.IO_vectors.create () in *)
+(*   List.iter *)
+(*     (fun { Faraday.buffer; off; len } -> *)
+(*       Lwt_unix.IO_vectors.append_bigarray vecs buffer off len) *)
+(*     iovecs; *)
+(*   Lwt_unix.writev sock vecs *)
+
 let writev sock iovecs =
   let vecs = Lwt_unix.IO_vectors.create () in
-  List.iter
-    (fun { Faraday.buffer; off; len } ->
-      Lwt_unix.IO_vectors.append_bigarray vecs buffer off len)
+  Lwt_dllist.iter_l
+    (fun iovec ->
+      Lwt_unix.IO_vectors.append_bigarray vecs iovec.Iovec.buf iovec.pos
+        iovec.len)
     iovecs;
   Lwt_unix.writev sock vecs
 

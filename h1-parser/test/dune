@@ -2,9 +2,5 @@
  (name h1_parser_tests)
  (inline_tests)
  (preprocess
-  (pps
-   ppx_sexp_conv
-   ppx_expect
-   base_quickcheck.ppx_quickcheck
-   ppx_assert))
+  (pps ppx_sexp_conv ppx_expect base_quickcheck.ppx_quickcheck ppx_assert))
  (libraries h1-parser base sexplib0 stdio base_quickcheck))

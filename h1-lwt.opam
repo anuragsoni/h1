@@ -6,7 +6,7 @@ depends: [
   "h1-parser" {= version}
   "bigstringaf"
   "lwt"
-  "faraday"
+  "lwt-dllist"
   "odoc" {with-doc}
 ]
 build: [
