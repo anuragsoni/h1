@@ -1,7 +1,5 @@
-type t [@@deriving sexp_of]
-
+type t
 type action = Need_data | Req of H1_types.Request.t | Paused | Close
-[@@deriving sexp_of]
 
 val create :
   read_buf_size:int ->

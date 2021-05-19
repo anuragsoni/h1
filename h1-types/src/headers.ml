@@ -1,7 +1,7 @@
-open Sexplib0.Sexp_conv
+type t = (string * string) list
 
-type t = (string * string) list [@@deriving sexp]
-
+let pp_header = Fmt.Dump.pair Fmt.Dump.string Fmt.Dump.string
+let pp = Fmt.Dump.list pp_header
 let empty = []
 let of_list xs = xs
 let to_list headers = headers

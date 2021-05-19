@@ -1,4 +1,4 @@
-type error = Msg of string | Partial [@@deriving sexp]
+type error = Msg of string | Partial
 
 val parse_headers :
   ?off:int ->

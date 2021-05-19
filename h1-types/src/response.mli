@@ -1,10 +1,4 @@
-type t = {
-  version : Version.t;
-  status : Status.t;
-  reason_phrase : string;
-  headers : Headers.t;
-}
-[@@deriving sexp_of]
+type t
 
 val create :
   ?version:Version.t ->
@@ -12,3 +6,9 @@ val create :
   ?headers:Headers.t ->
   Status.t ->
   t
+
+val version : t -> Version.t
+val reason_phrase : t -> string
+val headers : t -> Headers.t
+val status : t -> Status.t
+val pp : t Fmt.t [@@ocaml.toplevel_printer]

@@ -10,7 +10,6 @@ type t =
   | `TRACE
   | (* https://datatracker.ietf.org/doc/html/rfc5789 *)
     `PATCH ]
-[@@deriving sexp]
 
 let of_string = function
   | "GET" -> Some `GET
@@ -34,3 +33,5 @@ let to_string = function
   | `OPTIONS -> "OPTIONS"
   | `TRACE -> "TRACE"
   | `PATCH -> "PATCH"
+
+let pp = Fmt.of_to_string to_string

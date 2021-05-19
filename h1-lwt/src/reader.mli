@@ -1,4 +1,4 @@
-type t [@@deriving sexp_of]
+type t
 
 val create : int -> t
 val length : t -> int

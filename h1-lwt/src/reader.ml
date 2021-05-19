@@ -1,12 +1,9 @@
-open Sexplib0.Sexp_conv
-
 type t = {
-  buf : (Bigstringaf.t[@sexp.opaque]);
+  buf : Bigstringaf.t;
   mutable pos : int;
   mutable max : int;
   mutable closed : bool;
 }
-[@@deriving sexp_of]
 
 let create size =
   let buf = Bigstringaf.create size in

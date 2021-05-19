@@ -7,10 +7,9 @@
 (package
  (name h1-types)
  (depends
+  fmt
   (ocaml
-   (>= 4.11.0))
-  sexplib0
-  ppx_sexp_conv))
+   (>= 4.11.0))))
 
 (package
  (name h1-parser)
@@ -18,12 +17,10 @@
   (h1-types
    (= :version))
   bigstringaf
-  sexplib0
-  ppx_sexp_conv
   (ppx_expect :with-test)
   (base :with-test)
   (stdio :with-test)
-  (ppx_custom_printf :with-test)
+  (ppx_sexp_conv :with-test)
   (base_quickcheck :with-test)
   (ppx_assert :with-test)))
 
@@ -36,5 +33,4 @@
    (= :version))
   bigstringaf
   lwt
-  faraday
-  sexplib0))
+  faraday))

@@ -1,15 +1,14 @@
 open H1_types
 
 module Server_state = struct
-  type t = Idle | Request_received of Request.t [@@deriving sexp]
+  type t = Idle | Request_received of Request.t
 end
 
 module Client_state = struct
-  type t = Idle | Done [@@deriving sexp]
+  type t = Idle | Done
 end
 
 type action = Need_data | Req of Request.t | Paused | Close
-[@@deriving sexp_of]
 
 type t = {
   reader : Reader.t;
@@ -17,7 +16,6 @@ type t = {
   mutable state : Server_state.t;
   mutable peer_state : Client_state.t;
 }
-[@@deriving sexp_of]
 
 let create ~read_buf_size ~write_buf_size writev =
   let reader = Reader.create read_buf_size in
@@ -31,11 +29,11 @@ let reset t =
   t.peer_state <- Idle
 
 let write_response conn resp =
-  Writer.write_string conn.writer (Version.to_string resp.Response.version);
+  Writer.write_string conn.writer (Version.to_string @@ Response.version resp);
   Writer.write_char conn.writer ' ';
-  Writer.write_string conn.writer (Status.to_string resp.status);
+  Writer.write_string conn.writer (Status.to_string @@ Response.status resp);
   Writer.write_char conn.writer ' ';
-  Writer.write_string conn.writer resp.reason_phrase;
+  Writer.write_string conn.writer @@ Response.reason_phrase resp;
   Writer.write_string conn.writer "\r\n";
   Headers.iteri
     ~f:(fun ~key ~data ->
@@ -43,7 +41,7 @@ let write_response conn resp =
       Writer.write_string conn.writer ": ";
       Writer.write_string conn.writer data;
       Writer.write_string conn.writer "\r\n")
-    resp.headers;
+    (Response.headers resp);
   Writer.write_string conn.writer "\r\n"
 
 let write conn msg =

@@ -1,4 +1,4 @@
-type t [@@deriving sexp_of]
+type t
 
 val create : writev:(Bigstringaf.t Faraday.iovec list -> int Lwt.t) -> int -> t
 val write_string : t -> string -> unit

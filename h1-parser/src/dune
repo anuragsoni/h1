@@ -1,11 +1,9 @@
 (library
  (name h1_parser)
  (public_name h1-parser)
- (preprocess
-  (pps ppx_sexp_conv))
  (foreign_stubs
   (language c)
   (names h1_parser_stubs)
   (flags
    (:standard -Wall -Wextra -Wpedantic -O3)))
- (libraries bigstringaf h1-types sexplib0))
+ (libraries bigstringaf h1-types))

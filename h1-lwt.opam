@@ -7,7 +7,6 @@ depends: [
   "bigstringaf"
   "lwt"
   "faraday"
-  "sexplib0"
   "odoc" {with-doc}
 ]
 build: [

@@ -1,5 +1,3 @@
-open Sexplib0.Sexp_conv
-
 (* TODO: Remove this if https://github.com/inhabitedtype/bigstringaf/pulls gets
    merged. *)
 external unsafe_memchr : Bigstringaf.t -> int -> char -> int -> int
@@ -8,12 +6,11 @@ external unsafe_memchr : Bigstringaf.t -> int -> char -> int -> int
 
 module Source = struct
   type t = {
-    buffer : (Bigstringaf.t[@sexp.opaque]);
+    buffer : Bigstringaf.t;
     mutable off : int;
     min_off : int;
     upper_bound : int;
   }
-  [@@deriving sexp_of]
 
   let of_bigstring ?off ?len buffer =
     let buf_len = Bigstringaf.length buffer in
@@ -56,9 +53,9 @@ module Source = struct
     then
       invalid_arg
         (Format.asprintf
-           "H1_parser.Source.substring: Index out of bounds. source: %a, \
-            Requested off: %d, len: %d"
-           Sexplib0.Sexp.pp_mach (sexp_of_t t) off len);
+           "H1_parser.Source.substring: Index out of bounds., Requested off: \
+            %d, len: %d"
+           off len);
     Bigstringaf.substring t.buffer ~off:(t.off + off) ~len
 
   let consumed t = t.off - t.min_off
@@ -76,9 +73,9 @@ module Source = struct
     then
       invalid_arg
         (Format.asprintf
-           "H1_parser.Source.substring: Index out of bounds. source: %a, \
-            Requested off: %d, len: %d"
-           Sexplib0.Sexp.pp_mach (sexp_of_t t) off len);
+           "H1_parser.Source.substring: Index out of bounds. Requested off: \
+            %d, len: %d"
+           off len);
     let idx = ref off in
     while !idx < len && f (get t !idx) do
       incr idx
@@ -86,7 +83,7 @@ module Source = struct
     if !idx = len then true else false
 end
 
-type error = Msg of string | Partial [@@deriving sexp]
+type error = Msg of string | Partial
 
 type 'a parser = { run : 'r. Source.t -> (error -> 'r) -> ('a -> 'r) -> 'r }
 [@@unboxed]

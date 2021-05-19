@@ -1,10 +1,7 @@
-open Sexplib0.Sexp_conv
-
 type t = {
-  buf : (Faraday.t[@sexp.opaque]);
+  buf : Faraday.t;
   writev : Faraday.bigstring Faraday.iovec list -> int Lwt.t;
 }
-[@@deriving sexp_of]
 
 let create ~writev size =
   let buf = Faraday.create size in

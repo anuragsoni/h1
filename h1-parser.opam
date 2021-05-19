@@ -4,12 +4,10 @@ depends: [
   "dune" {>= "2.8"}
   "h1-types" {= version}
   "bigstringaf"
-  "sexplib0"
-  "ppx_sexp_conv"
   "ppx_expect" {with-test}
   "base" {with-test}
   "stdio" {with-test}
-  "ppx_custom_printf" {with-test}
+  "ppx_sexp_conv" {with-test}
   "base_quickcheck" {with-test}
   "ppx_assert" {with-test}
   "odoc" {with-doc}
