@@ -17,9 +17,9 @@ type t = {
   mutable peer_state : Client_state.t;
 }
 
-let create ~read_buf_size ~write_buf_size writev =
+let create ~read_buf_size ~write_buf_size write =
   let reader = Reader.create read_buf_size in
-  let writer = Writer.create ~writev write_buf_size in
+  let writer = Writer.create ~write write_buf_size in
   { reader; writer; state = Idle; peer_state = Idle }
 
 let feed_data ~f conn = Reader.fill ~f conn.reader
@@ -29,27 +29,25 @@ let reset t =
   t.peer_state <- Idle
 
 let write_response conn resp =
-  let buf = Buffer.create 512 in
-  Buffer.add_string buf (Version.to_string @@ Response.version resp);
-  Buffer.add_char buf ' ';
-  Buffer.add_string buf (Status.to_string @@ Response.status resp);
-  Buffer.add_char buf ' ';
-  Buffer.add_string buf @@ Response.reason_phrase resp;
-  Buffer.add_string buf "\r\n";
+  Writer.write_string conn.writer (Version.to_string @@ Response.version resp);
+  Writer.write_char conn.writer ' ';
+  Writer.write_string conn.writer (Status.to_string @@ Response.status resp);
+  Writer.write_char conn.writer ' ';
+  Writer.write_string conn.writer @@ Response.reason_phrase resp;
+  Writer.write_string conn.writer "\r\n";
   Headers.iteri
     ~f:(fun ~key ~data ->
-      Buffer.add_string buf key;
-      Buffer.add_string buf ": ";
-      Buffer.add_string buf data;
-      Buffer.add_string buf "\r\n")
+      Writer.write_string conn.writer key;
+      Writer.write_string conn.writer ": ";
+      Writer.write_string conn.writer data;
+      Writer.write_string conn.writer "\r\n")
     (Response.headers resp);
-  Buffer.add_string buf "\r\n";
-  Writer.write_string conn.writer (Buffer.contents buf)
+  Writer.write_string conn.writer "\r\n"
 
 let write conn msg =
   match msg with
   | `Response res -> write_response conn res
-  | `Data d -> Writer.schedule_bigstring conn.writer d
+  | `Data d -> Writer.write_bigstring conn.writer d
 
 let flushed conn = Writer.flushed conn.writer
 let write_all conn = Writer.write_all conn.writer
