@@ -3,32 +3,26 @@ module Flush = struct
 end
 
 type t = {
-  buf : Bigstringaf.t;
-  mutable pos : int;
-  mutable max : int;
+  buf : Bigbuffer.t;
   mutable closed : bool;
   mutable bytes_scheduled : int;
   mutable bytes_written : int;
   flushes : Flush.t Queue.t;
-  iovecs : Iovec.t Lwt_dllist.t;
-  writev : Iovec.t Lwt_dllist.t -> int Lwt.t;
+  write : Iovec.t -> int Lwt.t;
 }
 
-let create ~writev size =
-  let buf = Bigstringaf.create size in
+let create ~write size =
+  let buf = Bigbuffer.create size in
   {
     buf;
-    pos = 0;
-    max = 0;
     closed = false;
     flushes = Queue.create ();
-    iovecs = Lwt_dllist.create ();
-    writev;
+    write;
     bytes_scheduled = 0;
     bytes_written = 0;
   }
 
-let pending t = Lwt_dllist.fold_l (fun x acc -> acc + x.Iovec.len) t.iovecs 0
+let pending t = Bigbuffer.length t.buf
 
 let flushed t =
   if pending t = 0 then Lwt.return_unit
@@ -38,33 +32,19 @@ let flushed t =
     Queue.push flush t.flushes;
     p
 
-let schedule_iovec t iovec =
-  t.bytes_scheduled <- t.bytes_scheduled + iovec.Iovec.len;
-  ignore (Lwt_dllist.add_r iovec t.iovecs)
-
-let schedule_bigstring t ?pos ?len buf =
-  schedule_iovec t (Iovec.of_bigstring ?pos ?len buf)
-
-(* TODO: Do bounds check and grow buffer to make more space if needed *)
 let write_string t msg =
   let len = String.length msg in
-  let pos = t.max in
-  Bigstringaf.blit_from_string msg ~src_off:0 ~dst_off:t.max ~len t.buf;
-  t.max <- t.max + len;
-  schedule_iovec t (Iovec.of_bigstring t.buf ~pos ~len)
+  t.bytes_scheduled <- t.bytes_scheduled + len;
+  Bigbuffer.add_string t.buf msg
 
 let write_char t msg =
-  let pos = t.max in
-  Bigstringaf.set t.buf t.max msg;
-  t.max <- t.max + 1;
-  schedule_iovec t (Iovec.of_bigstring t.buf ~pos ~len:1)
+  t.bytes_scheduled <- t.bytes_scheduled + 1;
+  Bigbuffer.add_char t.buf msg
 
 let write_bigstring t msg =
   let len = Bigstringaf.length msg in
-  let pos = t.max in
-  Bigstringaf.blit msg ~src_off:0 ~dst_off:t.max ~len t.buf;
-  t.max <- t.max + len;
-  schedule_iovec t (Iovec.of_bigstring t.buf ~pos ~len)
+  t.bytes_scheduled <- t.bytes_scheduled + len;
+  Bigbuffer.add_bigstring t.buf msg
 
 let wakeup_flush_if_needed t =
   while
@@ -75,22 +55,7 @@ let wakeup_flush_if_needed t =
   done
 
 let drop t count =
-  let rec aux t count =
-    if count = 0 then ();
-    if Lwt_dllist.is_empty t.iovecs then
-      invalid_arg
-        "H1_lwt.Writer.drop: Trying to remove more bytes than we have in the \
-         writer";
-    let peek = Lwt_dllist.take_l t.iovecs in
-    if peek.Iovec.len >= count then
-      ignore
-        (Lwt_dllist.add_l
-           (Iovec.of_bigstring peek.Iovec.buf ~pos:(peek.pos + count)
-              ~len:(peek.len - count))
-           t.iovecs)
-    else aux t (count - peek.len)
-  in
-  aux t count;
+  Bigbuffer.drop t.buf count;
   t.bytes_written <- t.bytes_written + count;
   wakeup_flush_if_needed t
 
@@ -99,10 +64,9 @@ let write_all t =
     let pending = pending t in
     if pending = 0 then Lwt.return_unit
     else
-      let%lwt count = t.writev t.iovecs in
+      let iovec = Bigbuffer.content_iovec t.buf in
+      let%lwt count = t.write iovec in
       drop t count;
       if count = pending then Lwt.return_unit else aux t
   in
-  let%lwt () = aux t in
-  t.max <- 0;
-  Lwt.return_unit
+  aux t
