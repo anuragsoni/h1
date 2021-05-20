@@ -62,7 +62,7 @@ let consume ~f t =
   let res, count = f t.buffer ~pos:0 ~len:t.pos in
   if count < 0 || count > t.pos then
     invalid_arg "Bigbuffer.consume: Invalid response from f consuming buffer.";
-  Bigstringaf.blit t.buffer ~src_off:count ~dst_off:0 ~len:count t.buffer;
+  Bigstringaf.blit t.buffer ~src_off:count ~dst_off:0 ~len:(length t - count) t.buffer;
   t.pos <- t.pos - count;
   res
 
@@ -70,6 +70,6 @@ let consume' ~f t =
   let%lwt res, count = f t.buffer ~pos:0 ~len:t.pos in
   if count < 0 || count > t.pos then
     invalid_arg "Bigbuffer.consume: Invalid response from f consuming buffer.";
-  Bigstringaf.blit t.buffer ~src_off:count ~dst_off:0 ~len:count t.buffer;
+  Bigstringaf.blit t.buffer ~src_off:count ~dst_off:0 ~len:(length t - count) t.buffer;
   t.pos <- t.pos - count;
   Lwt.return res
