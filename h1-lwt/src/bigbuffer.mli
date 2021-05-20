@@ -13,6 +13,7 @@ val fill :
   f:(Bigstringaf.t -> pos:int -> len:int -> int Lwt.t) -> t -> int Lwt.t
 
 val add_bigstring : t -> Bigstringaf.t -> unit
+val add_iovec : t -> Iovec.t -> unit
 val consume : f:(Bigstringaf.t -> pos:int -> len:int -> 'a * int) -> t -> 'a
 
 val consume' :

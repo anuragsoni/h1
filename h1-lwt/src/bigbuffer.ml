@@ -58,11 +58,21 @@ let add_bigstring buf s =
   Bigstringaf.unsafe_blit s ~src_off:0 buf.buffer ~dst_off:buf.pos ~len;
   buf.pos <- new_pos
 
+let add_iovec buf iovec =
+  let len = iovec.Iovec.len in
+  let new_pos = buf.pos + len in
+  if new_pos > buf.len then resize buf len;
+  Bigstringaf.unsafe_blit iovec.buf ~src_off:iovec.pos buf.buffer
+    ~dst_off:buf.pos ~len;
+  buf.pos <- new_pos
+
 let consume ~f t =
   let res, count = f t.buffer ~pos:0 ~len:t.pos in
   if count < 0 || count > t.pos then
     invalid_arg "Bigbuffer.consume: Invalid response from f consuming buffer.";
-  Bigstringaf.blit t.buffer ~src_off:count ~dst_off:0 ~len:count t.buffer;
+  Bigstringaf.blit t.buffer ~src_off:count ~dst_off:0
+    ~len:(length t - count)
+    t.buffer;
   t.pos <- t.pos - count;
   res
 
@@ -70,6 +80,8 @@ let consume' ~f t =
   let%lwt res, count = f t.buffer ~pos:0 ~len:t.pos in
   if count < 0 || count > t.pos then
     invalid_arg "Bigbuffer.consume: Invalid response from f consuming buffer.";
-  Bigstringaf.blit t.buffer ~src_off:count ~dst_off:0 ~len:count t.buffer;
+  Bigstringaf.blit t.buffer ~src_off:count ~dst_off:0
+    ~len:(length t - count)
+    t.buffer;
   t.pos <- t.pos - count;
   Lwt.return res

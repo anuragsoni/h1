@@ -44,6 +44,11 @@ let write_bigstring t msg =
   t.bytes_scheduled <- t.bytes_scheduled + len;
   Bigbuffer.add_bigstring t.buf msg
 
+let write_iovec t iovec =
+  let len = iovec.Iovec.len in
+  t.bytes_scheduled <- t.bytes_scheduled + len;
+  Bigbuffer.add_iovec t.buf iovec
+
 let wakeup_flush_if_needed t =
   while
     (not (Queue.is_empty t.flushes))

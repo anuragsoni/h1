@@ -32,3 +32,24 @@ let find t key =
     | _ :: xs -> aux xs
   in
   aux t
+
+let find_multi t key =
+  let rec aux acc = function
+    | [] -> List.rev acc
+    | (k, v) :: xs when caseless_equal k key -> aux (v :: acc) xs
+    | _ :: xs -> aux acc xs
+  in
+  aux [] t
+
+let get_transfer_encoding headers =
+  match List.rev @@ find_multi headers "Transfer-Encoding" with
+  | "chunked" :: _ -> `Chunked
+  | _x :: _ -> `Bad_request
+  | [] -> (
+      match
+        List.sort_uniq String.compare (find_multi headers "Content-Length")
+      with
+      | [] -> `Fixed 0L
+      (* TODO: check for exceptions when converting to int *)
+      | [ x ] -> `Fixed (Int64.of_string x)
+      | _ -> `Bad_request)

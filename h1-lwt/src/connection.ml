@@ -1,33 +1,16 @@
 open H1_types
 
-module Server_state = struct
-  type t = Idle | Request_received of Request.t
-end
-
-module Client_state = struct
-  type t = Idle | Done
-end
-
-type action = Need_data | Req of Request.t | Paused | Close
-
 type t = {
   reader : Reader.t;
   writer : Writer.t;
+  refill : Bigstringaf.t -> pos:int -> len:int -> int Lwt.t;
   write : Bigstringaf.t -> pos:int -> len:int -> int Lwt.t;
-  mutable state : Server_state.t;
-  mutable peer_state : Client_state.t;
 }
 
-let create ~read_buf_size ~write_buf_size write =
+let create ~read_buf_size ~write_buf_size ~write ~refill =
   let reader = Reader.create read_buf_size in
   let writer = Writer.create write_buf_size in
-  { reader; writer; state = Idle; peer_state = Idle; write }
-
-let feed_data ~f conn = Reader.fill ~f conn.reader
-
-let reset t =
-  t.state <- Idle;
-  t.peer_state <- Idle
+  { reader; writer; write; refill }
 
 let write_response conn resp =
   Writer.write_string conn.writer (Version.to_string @@ Response.version resp);
@@ -45,26 +28,37 @@ let write_response conn resp =
     (Response.headers resp);
   Writer.write_string conn.writer "\r\n"
 
-let write conn msg =
-  match msg with
-  | `Response res -> write_response conn res
-  | `Data d -> Writer.write_bigstring conn.writer d
-
-let flushed conn = Writer.flushed conn.writer
+(* let flushed conn = Writer.flushed conn.writer *)
 let write_all conn = Writer.write_all ~write:conn.write conn.writer
 
-let next_action conn =
-  match conn.peer_state with
-  | Client_state.Idle when Reader.is_empty conn.reader -> Need_data
-  | Idle ->
-      Reader.read
-        ~f:(fun buf ~pos ~len ->
-          match H1_parser.parse_request buf ~off:pos ~len with
-          | Ok (req, count) ->
-              conn.state <- Server_state.Request_received req;
-              conn.peer_state <- Client_state.Done;
-              (Req req, count)
-          | Error Partial -> (Need_data, 0)
-          | Error (Msg msg) -> failwith msg)
-        conn.reader
-  | Done -> Paused
+type service = Request.t * Body.t -> (Response.t * Body.t) Lwt.t
+
+let run conn service =
+  let stream = Http_stream.request_stream ~refill:conn.refill conn.reader in
+  Lstream.iter
+    ~f:(fun (req, req_body) ->
+      let%lwt res, body = service (req, req_body) in
+      write_response conn res;
+      let%lwt () =
+        match body with
+        | `String s ->
+            Writer.write_string conn.writer s;
+            write_all conn
+        | `Bigstring b ->
+            Writer.write_bigstring conn.writer b;
+            write_all conn
+        | `Stream s ->
+            Lstream.iter
+              ~f:(fun str ->
+                Writer.write_string conn.writer str;
+                write_all conn)
+              s
+        | `Iovecs s ->
+            Lstream.iter
+              ~f:(fun iovec ->
+                Writer.write_iovec conn.writer iovec;
+                write_all conn)
+              s
+      in
+      Body.drain req_body)
+    stream
