@@ -32,42 +32,29 @@ let text =
    sides of the well, and noticed that they were filled with cupboards......"
 
 let text = Bigstringaf.of_string text ~off:0 ~len:(String.length text)
-let write sock buf ~pos ~len = Lwt_bytes.write sock buf pos len
 
-let run sock conn =
-  let close, wakeup_close = Lwt.wait () in
-  let rec loop () =
-    match Connection.next_action conn with
-    | Close ->
-        Lwt.wakeup_later wakeup_close ();
-        Lwt.return_unit
-    | Need_data -> (
-        match%lwt
-          Connection.feed_data conn ~f:(fun buf ~pos ~len ->
-              Lwt_bytes.read sock buf pos len)
-        with
-        | `Eof ->
-            Lwt.wakeup_later wakeup_close ();
-            Lwt.return_unit
-        | `Ok _ -> loop ())
-    | Paused ->
-        Connection.reset conn;
-        loop ()
-    | Req _req ->
-        let resp =
-          Response.create
-            ~headers:
-              (Headers.of_list
-                 [ ("Content-Length", Int.to_string (Bigstringaf.length text)) ])
-            `Ok
-        in
-        Connection.write conn (`Response resp);
-        Connection.write conn (`Data text);
-        let%lwt () = Connection.write_all conn in
-        loop ()
-  in
-  Lwt.dont_wait (fun () -> loop ()) (fun _ -> Lwt.wakeup_later wakeup_close ());
-  close
+let run conn =
+  let requests = Connection.requests conn in
+  Lwt.catch
+    (fun () ->
+      Lstream.iter
+        ~f:(fun _req ->
+          let resp =
+            Response.create
+              ~headers:
+                (Headers.of_list
+                   [
+                     ("Content-Length", Int.to_string (Bigstringaf.length text));
+                   ])
+              `Ok
+          in
+          Connection.write conn (`Response resp);
+          Connection.write conn (`Data text);
+          Connection.write_all conn)
+        requests)
+    (fun exn ->
+      Logs.err (fun m -> m "%s" (Printexc.to_string exn));
+      Lwt.return_unit)
 
 let main port =
   let rec log_stats () =
@@ -86,9 +73,11 @@ let main port =
         (fun _ sock ->
           let conn =
             Connection.create ~read_buf_size:(10 * 1024)
-              ~write_buf_size:(10 * 1024) (write sock)
+              ~write_buf_size:(10 * 1024)
+              ~write:(fun buf ~pos ~len -> Lwt_bytes.write sock buf pos len)
+              ~refill:(fun buf ~pos ~len -> Lwt_bytes.read sock buf pos len)
           in
-          run sock conn)
+          run conn)
       >>= fun _server -> Lwt.return_unit);
   let forever, _ = Lwt.wait () in
   Lwt_main.run forever

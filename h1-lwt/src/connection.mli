@@ -4,7 +4,8 @@ type action = Need_data | Req of H1_types.Request.t | Paused | Close
 val create :
   read_buf_size:int ->
   write_buf_size:int ->
-  (Bigstringaf.t -> pos:int -> len:int -> int Lwt.t) ->
+  write:(Bigstringaf.t -> pos:int -> len:int -> int Lwt.t) ->
+  refill:(Bigstringaf.t -> pos:int -> len:int -> int Lwt.t) ->
   t
 
 val feed_data :
@@ -20,3 +21,4 @@ val write :
 val flushed : t -> unit Lwt.t
 val write_all : t -> unit Lwt.t
 val next_action : t -> action
+val requests : t -> H1_types.Request.t Lstream.t

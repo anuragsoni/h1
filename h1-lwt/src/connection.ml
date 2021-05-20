@@ -13,15 +13,16 @@ type action = Need_data | Req of Request.t | Paused | Close
 type t = {
   reader : Reader.t;
   writer : Writer.t;
+  refill : Bigstringaf.t -> pos:int -> len:int -> int Lwt.t;
   write : Bigstringaf.t -> pos:int -> len:int -> int Lwt.t;
   mutable state : Server_state.t;
   mutable peer_state : Client_state.t;
 }
 
-let create ~read_buf_size ~write_buf_size write =
+let create ~read_buf_size ~write_buf_size ~write ~refill =
   let reader = Reader.create read_buf_size in
   let writer = Writer.create write_buf_size in
-  { reader; writer; state = Idle; peer_state = Idle; write }
+  { reader; writer; state = Idle; peer_state = Idle; write; refill }
 
 let feed_data ~f conn = Reader.fill ~f conn.reader
 
@@ -68,3 +69,5 @@ let next_action conn =
           | Error (Msg msg) -> failwith msg)
         conn.reader
   | Done -> Paused
+
+let requests conn = Http_stream.request_stream ~refill:conn.refill conn.reader
