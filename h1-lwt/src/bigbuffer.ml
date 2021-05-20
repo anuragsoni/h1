@@ -12,7 +12,6 @@ let create size =
   { buffer; pos = 0; len = size; init = buffer }
 
 let contents buf = Bigstringaf.sub buf.buffer ~off:0 ~len:buf.pos
-let content_iovec buf = Iovec.of_bigstring buf.buffer ~pos:0 ~len:buf.pos
 let length buf = buf.pos
 let clear buf = buf.pos <- 0
 
@@ -67,11 +66,10 @@ let consume ~f t =
   t.pos <- t.pos - count;
   res
 
-let drop t n =
-  if n < 0 || n > length t then
-    invalid_arg
-    @@ Printf.sprintf
-         "Bigbuffer.drop: attempting to drop %d bytes. Input must be > 0 && <= \
-          buffer length: (%d)"
-         n (length t);
-  consume ~f:(fun _ ~pos:_ ~len:_ -> ((), n)) t
+let consume' ~f t =
+  let%lwt res, count = f t.buffer ~pos:0 ~len:t.pos in
+  if count < 0 || count > t.pos then
+    invalid_arg "Bigbuffer.consume: Invalid response from f consuming buffer.";
+  Bigstringaf.blit t.buffer ~src_off:count ~dst_off:0 ~len:count t.buffer;
+  t.pos <- t.pos - count;
+  Lwt.return res

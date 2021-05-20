@@ -52,19 +52,20 @@ let wakeup_flush_if_needed t =
     Lwt.wakeup_later (Queue.pop t.flushes).Flush.wake_promise ()
   done
 
-let drop t count =
-  Bigbuffer.drop t.buf count;
-  t.bytes_written <- t.bytes_written + count;
-  wakeup_flush_if_needed t
-
 let write_all ~write t =
   let rec aux t =
     let pending = pending t in
     if pending = 0 then Lwt.return_unit
     else
-      let iovec = Bigbuffer.content_iovec t.buf in
-      let%lwt count = write iovec in
-      drop t count;
+      let%lwt count =
+        Bigbuffer.consume'
+          ~f:(fun buf ~pos ~len ->
+            let%lwt count = write buf ~pos ~len in
+            Lwt.return (count, count))
+          t.buf
+      in
+      t.bytes_written <- t.bytes_written + count;
+      wakeup_flush_if_needed t;
       if count = pending then Lwt.return_unit else aux t
   in
   aux t

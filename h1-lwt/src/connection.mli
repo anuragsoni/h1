@@ -2,7 +2,10 @@ type t
 type action = Need_data | Req of H1_types.Request.t | Paused | Close
 
 val create :
-  read_buf_size:int -> write_buf_size:int -> (Iovec.t -> int Lwt.t) -> t
+  read_buf_size:int ->
+  write_buf_size:int ->
+  (Bigstringaf.t -> pos:int -> len:int -> int Lwt.t) ->
+  t
 
 val feed_data :
   f:(Bigstringaf.t -> pos:int -> len:int -> int Lwt.t) ->

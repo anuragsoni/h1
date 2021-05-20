@@ -2,7 +2,6 @@ type t
 
 val create : int -> t
 val contents : t -> Bigstringaf.t
-val content_iovec : t -> Iovec.t
 val length : t -> int
 val clear : t -> unit
 val reset : t -> unit
@@ -15,4 +14,6 @@ val fill :
 
 val add_bigstring : t -> Bigstringaf.t -> unit
 val consume : f:(Bigstringaf.t -> pos:int -> len:int -> 'a * int) -> t -> 'a
-val drop : t -> int -> unit
+
+val consume' :
+  f:(Bigstringaf.t -> pos:int -> len:int -> ('a * int) Lwt.t) -> t -> 'a Lwt.t

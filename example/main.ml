@@ -32,7 +32,7 @@ let text =
    sides of the well, and noticed that they were filled with cupboards......"
 
 let text = Bigstringaf.of_string text ~off:0 ~len:(String.length text)
-let write sock iovec = Lwt_bytes.write sock iovec.Iovec.buf iovec.pos iovec.len
+let write sock buf ~pos ~len = Lwt_bytes.write sock buf pos len
 
 let run sock conn =
   let close, wakeup_close = Lwt.wait () in

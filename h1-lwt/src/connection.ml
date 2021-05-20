@@ -13,7 +13,7 @@ type action = Need_data | Req of Request.t | Paused | Close
 type t = {
   reader : Reader.t;
   writer : Writer.t;
-  write : Iovec.t -> int Lwt.t;
+  write : Bigstringaf.t -> pos:int -> len:int -> int Lwt.t;
   mutable state : Server_state.t;
   mutable peer_state : Client_state.t;
 }
