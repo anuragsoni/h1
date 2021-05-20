@@ -21,3 +21,6 @@ let rec iter ~f t =
   | Some v ->
       let%lwt () = f v in
       iter ~f t
+
+let rec drain t =
+  match%lwt next t with None -> Lwt.return_unit | Some _ -> drain t
