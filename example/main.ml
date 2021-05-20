@@ -34,24 +34,18 @@ let text =
 let text = Bigstringaf.of_string text ~off:0 ~len:(String.length text)
 
 let run conn =
-  let requests = Connection.requests conn in
+  let service _req =
+    let resp =
+      Response.create
+        ~headers:
+          (Headers.of_list
+             [ ("Content-Length", Int.to_string (Bigstringaf.length text)) ])
+        `Ok
+    in
+    Lwt.return (resp, Body.of_bigstring text)
+  in
   Lwt.catch
-    (fun () ->
-      Lstream.iter
-        ~f:(fun _req ->
-          let resp =
-            Response.create
-              ~headers:
-                (Headers.of_list
-                   [
-                     ("Content-Length", Int.to_string (Bigstringaf.length text));
-                   ])
-              `Ok
-          in
-          Connection.write conn (`Response resp);
-          Connection.write conn (`Data text);
-          Connection.write_all conn)
-        requests)
+    (fun () -> Connection.run conn service)
     (fun exn ->
       Logs.err (fun m -> m "%s" (Printexc.to_string exn));
       Lwt.return_unit)
