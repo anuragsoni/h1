@@ -38,21 +38,12 @@ let write_all conn = Writer.write_all ~write:conn.write conn.writer
 
 type service = Request.t -> (Response.t * Body.t) Lwt.t
 
-let stream_of_service conn service =
-  let stream = Http_stream.request_stream ~refill:conn.refill conn.reader in
-  let loop () =
-    match%lwt Lstream.next stream with
-    | None -> Lwt.return_none
-    | Some req ->
-        let%lwt res = service req in
-        Lwt.return_some res
-  in
-  Lstream.from_fn loop
-
 let run conn service =
+  let stream = Http_stream.request_stream ~refill:conn.refill conn.reader in
   Lstream.iter
-    ~f:(fun (resp, body) ->
-      write conn (`Response resp);
+    ~f:(fun req ->
+      let%lwt res, body = service req in
+      write conn (`Response res);
       write conn (`Body body);
       write_all conn)
-    (stream_of_service conn service)
+    stream
