@@ -33,7 +33,7 @@ let text =
 
 let text = Bigstringaf.of_string text ~off:0 ~len:(String.length text)
 
-let run conn =
+let run sock =
   let service (_req, body) =
     let body = Body.to_string_stream body in
     let%lwt () =
@@ -53,7 +53,11 @@ let run conn =
     Lwt.return (resp, `Bigstring text)
   in
   Lwt.catch
-    (fun () -> Connection.run conn service)
+    (fun () ->
+      Http_server.run ~read_buf_size:(10 * 1024) ~write_buf_size:(10 * 1024)
+        ~write:(fun buf ~pos ~len -> Lwt_bytes.write sock buf pos len)
+        ~refill:(fun buf ~pos ~len -> Lwt_bytes.read sock buf pos len)
+        service)
     (fun exn ->
       Logs.err (fun m -> m "%s" (Printexc.to_string exn));
       Lwt.return_unit)
@@ -72,14 +76,7 @@ let main port =
   let listen_address = Unix.(ADDR_INET (inet_addr_loopback, port)) in
   Lwt.async (fun () ->
       Lwt_io.establish_server_with_client_socket ~backlog:11_000 listen_address
-        (fun _ sock ->
-          let conn =
-            Connection.create ~read_buf_size:(10 * 1024)
-              ~write_buf_size:(10 * 1024)
-              ~write:(fun buf ~pos ~len -> Lwt_bytes.write sock buf pos len)
-              ~refill:(fun buf ~pos ~len -> Lwt_bytes.read sock buf pos len)
-          in
-          run conn)
+        (fun _ sock -> run sock)
       >>= fun _server -> Lwt.return_unit);
   let forever, _ = Lwt.wait () in
   Lwt_main.run forever
