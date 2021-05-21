@@ -41,3 +41,7 @@ let of_list xs =
         Lwt.return_some x
   in
   from_fn fn
+
+type ('a, 'b) conduit = 'a t -> 'b t
+
+let through conduit t = conduit t

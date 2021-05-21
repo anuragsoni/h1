@@ -3,6 +3,7 @@ type t
 val create : int -> t
 val contents : t -> Bigstringaf.t
 val length : t -> int
+val capacity : t -> int
 val clear : t -> unit
 val reset : t -> unit
 val resize : t -> int -> unit

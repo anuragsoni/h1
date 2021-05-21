@@ -21,27 +21,37 @@ That said, the approach seems to work well and in my initial tests the performan
 ### HTTP Server
 
 ```ocaml
-let service (req, body) =
-    let message = "Hello, World!" in
+open H1_types
+open H1_lwt
+
+let run (sock : Lwt_unix.file_descr) =
+  let service (_req, body) =
+    let body = Body.to_string_stream body in
+    let%lwt () =
+      Lstream.iter
+        ~f:(fun x ->
+          Logs.info (fun m -> m "%s" x);
+          Lwt.return_unit)
+        body
+    in
     let resp =
       Response.create
         ~headers:
           (Headers.of_list
-             [ ("Content-Length", Int.to_string (String.length message)) ])
+             [ ("Content-Length", Int.to_string (Bigstringaf.length text)) ])
         `Ok
     in
-    Lwt.return (resp, `String message)
-
-let run_server listen_address =
-    Lwt_io.establish_server_with_client_socket listen_address
-    (fun _ sock ->
-        let conn =
-            Connection.create ~read_buf_size:(10 * 1024)
-                ~write_buf_size:(10 * 1024)
-                ~write:(fun buf ~pos ~len -> Lwt_bytes.write sock buf pos len)
-                ~refill:(fun buf ~pos ~len -> Lwt_bytes.read sock buf pos len)
-        in
-        Connection.run conn service)
+    Lwt.return (resp, `Bigstring text)
+  in
+  Lwt.catch
+    (fun () ->
+      Http_server.run ~read_buf_size:(10 * 1024) ~write_buf_size:(10 * 1024)
+        ~write:(fun buf ~pos ~len -> Lwt_bytes.write sock buf pos len)
+        ~refill:(fun buf ~pos ~len -> Lwt_bytes.read sock buf pos len)
+        service)
+    (fun exn ->
+      Logs.err (fun m -> m "%s" (Printexc.to_string exn));
+      Lwt.return_unit)
 ```
 
 ## Todo

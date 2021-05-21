@@ -14,6 +14,7 @@ let create size =
 let contents buf = Bigstringaf.sub buf.buffer ~off:0 ~len:buf.pos
 let length buf = buf.pos
 let clear buf = buf.pos <- 0
+let capacity buf = buf.len
 
 let reset buf =
   buf.pos <- 0;
