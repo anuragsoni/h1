@@ -247,3 +247,27 @@ let%expect_test "Rejects headers with space before colon" =
   in
   run_test req;
   [%expect {| Error: Invalid header: Empty header key |}]
+
+let%expect_test "can parse chunked encoded data" =
+  let run_test str =
+    let buf = Bigstringaf.of_string str ~off:0 ~len:(String.length str) in
+    let res =
+      match H1_parser.parse_chunk buf with
+      | Ok (chunk, len) ->
+          let pp = Fmt.Dump.option Fmt.Dump.string in
+          Fmt.str "Chunk: %a , processed %d bytes" pp chunk len
+      | Error Partial -> "Partial"
+      | Error (Msg msg) -> Printf.sprintf "Error: %s" msg
+    in
+    print_endline res
+  in
+  run_test "4\r\nWiki\r\n";
+  [%expect {| Chunk: Some "Wiki" , processed 9 bytes |}];
+  run_test "6\r\npedia \r\n";
+  [%expect {| Chunk: Some "pedia " , processed 11 bytes |}];
+  run_test "4\r\nWi";
+  [%expect {| Partial |}];
+  run_test "0\r\n\r\n";
+  [%expect {| Chunk: None , processed 5 bytes |}];
+  run_test "E\r\nin \r\n\r\nchunks.\r\n0\r\n\r\n";
+  [%expect {| Chunk: Some "in \r\n\r\nchunks." , processed 19 bytes |}]

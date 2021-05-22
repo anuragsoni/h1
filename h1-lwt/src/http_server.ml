@@ -5,7 +5,22 @@ type service = Request.t * Body.t -> (Response.t * Body.t) Lwt.t
 
 let body_stream req bufstream =
   match Headers.get_transfer_encoding (Request.headers req) with
-  | `Chunked -> failwith "Not implemented yet"
+  | `Chunked ->
+      let rec fn () =
+        match%lwt Lstream.next bufstream with
+        | None -> Lwt.return_none
+        | Some buf -> (
+            match
+              Bigbuffer.consume buf ~f:(fun buf ~pos ~len ->
+                  match H1_parser.parse_chunk ~off:pos ~len buf with
+                  | Ok (res, c) -> (Ok res, c)
+                  | Error e -> (Error e, 0))
+            with
+            | Ok chunk -> Lwt.return chunk
+            | Error Partial -> fn ()
+            | Error (Msg msg) -> failwith msg)
+      in
+      Lstream.from_fn fn
   | `Bad_request -> failwith "Bad request"
   | `Fixed 0L -> Lstream.from_fn (fun () -> Lwt.return_none)
   | `Fixed len ->
