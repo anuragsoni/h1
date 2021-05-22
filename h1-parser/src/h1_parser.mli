@@ -17,3 +17,6 @@ val parse_request :
 
 val parse_chunk_length :
   ?off:int -> ?len:int -> Bigstringaf.t -> (int64 * int, error) result
+
+val parse_chunk :
+  ?off:int -> ?len:int -> Bigstringaf.t -> (string option * int, error) result

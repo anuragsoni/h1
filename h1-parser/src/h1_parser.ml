@@ -95,6 +95,13 @@ let ( let+ ) t f =
         t.run source on_err (fun v -> on_succ (f v)));
   }
 
+let ( let* ) t f =
+  {
+    run =
+      (fun source on_err on_succ ->
+        t.run source on_err (fun v -> (f v).run source on_err on_succ));
+  }
+
 let ( and+ ) a b =
   {
     run =
@@ -282,6 +289,19 @@ let request =
   let+ meth = meth and+ path = token and+ v = version and+ headers = headers in
   H1_types.Request.create ~version:v ~headers meth path
 
+let parse_chunk =
+  let* chunk_length = chunk_length in
+  let run source on_err on_succ =
+    let chunk_length = Int64.to_int chunk_length in
+    if chunk_length = 0 then with_eof source on_err on_succ None
+    else if Source.length source < chunk_length + 2 then on_err Partial
+    else
+      let chunk = Source.to_string source ~off:0 ~len:chunk_length in
+      Source.advance source chunk_length;
+      with_eof source on_err on_succ (Some chunk)
+  in
+  { run }
+
 let run_parser ?off ?len buf p =
   let source = Source.of_bigstring ?off ?len buf in
   p.run source (fun e -> Error e) (fun v -> Ok (v, Source.consumed source))
@@ -289,3 +309,4 @@ let run_parser ?off ?len buf p =
 let parse_request ?off ?len buf = run_parser ?off ?len buf request
 let parse_headers ?off ?len buf = run_parser ?off ?len buf headers
 let parse_chunk_length ?off ?len buf = run_parser ?off ?len buf chunk_length
+let parse_chunk ?off ?len buf = run_parser ?off ?len buf parse_chunk
