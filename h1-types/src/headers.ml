@@ -53,3 +53,9 @@ let get_transfer_encoding headers =
       (* TODO: check for exceptions when converting to int *)
       | [ x ] -> `Fixed (Int64.of_string x)
       | _ -> `Bad_request)
+
+let client_waiting_for_100_continue headers =
+  match find headers "Expect" with
+  | Some x when caseless_equal x "100-continue" -> true
+  | Some _ -> false
+  | None -> false
