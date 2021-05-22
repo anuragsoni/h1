@@ -20,10 +20,8 @@ That said, the approach seems to work well and in my initial tests the performan
 
 ### HTTP Server
 
+<!-- $MDX file=example/main.ml,part=simple_server -->
 ```ocaml
-open H1_types
-open H1_lwt
-
 let run (sock : Lwt_unix.file_descr) =
   let service (_req, body) =
     let body = Body.to_string_stream body in

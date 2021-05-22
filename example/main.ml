@@ -33,7 +33,9 @@ let text =
 
 let text = Bigstringaf.of_string text ~off:0 ~len:(String.length text)
 
-let run sock =
+[@@@part "simple_server"]
+
+let run (sock : Lwt_unix.file_descr) =
   let service (_req, body) =
     let body = Body.to_string_stream body in
     let%lwt () =
@@ -61,6 +63,8 @@ let run sock =
     (fun exn ->
       Logs.err (fun m -> m "%s" (Printexc.to_string exn));
       Lwt.return_unit)
+
+[@@@part "simple_server"]
 
 let main port =
   let rec log_stats () =

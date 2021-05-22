@@ -1,5 +1,7 @@
 (lang dune 2.8)
 
+(using mdx 0.1)
+
 (name h1)
 
 (generate_opam_files true)

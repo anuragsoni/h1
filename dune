@@ -2,3 +2,5 @@
  (release
   (ocamlopt_flags
    (:standard -O3))))
+
+(mdx)
