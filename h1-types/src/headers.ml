@@ -43,7 +43,7 @@ let find_multi t key =
 
 let get_transfer_encoding headers =
   match List.rev @@ find_multi headers "Transfer-Encoding" with
-  | "chunked" :: _ -> `Chunked
+  | x :: _ when caseless_equal x "chunked" -> `Chunked
   | _x :: _ -> `Bad_request
   | [] -> (
       match
