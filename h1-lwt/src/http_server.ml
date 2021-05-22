@@ -80,6 +80,27 @@ let write_response writer resp =
     (Response.headers resp);
   Writer.write_string writer "\r\n"
 
+let write_chunk writer = function
+  | `String s ->
+      let len = String.length s in
+      Writer.writef writer "%x\r\n" len;
+      Writer.write_string writer s;
+      Writer.write_string writer "\r\n"
+  | `Iovec iovec ->
+      let len = iovec.Iovec.len in
+      Writer.writef writer "%x\r\n" len;
+      Writer.write_iovec writer iovec;
+      Writer.write_string writer "\r\n"
+
+let write_final_chunk writer =
+  Writer.writef writer "%x\r\n" 0;
+  Writer.write_string writer "\r\n"
+
+let is_chunked_response resp =
+  match Headers.get_transfer_encoding (Response.headers resp) with
+  | `Chunked -> true
+  | `Bad_request | `Fixed _ -> false
+
 let run ~read_buf_size ~write_buf_size ~refill ~write service =
   let writer = Writer.create write_buf_size in
   let flush () = Writer.write_all ~write writer in
@@ -88,6 +109,7 @@ let run ~read_buf_size ~write_buf_size ~refill ~write service =
   |> Lstream.iter ~f:(fun (req, req_body) ->
          let%lwt res, body = service (req, req_body) in
          write_response writer res;
+         let is_chunk = is_chunked_response res in
          let%lwt () =
            match body with
            | `String s ->
@@ -97,16 +119,33 @@ let run ~read_buf_size ~write_buf_size ~refill ~write service =
                Writer.write_bigstring writer b;
                flush ()
            | `Stream s ->
-               Lstream.iter
-                 ~f:(fun str ->
-                   Writer.write_string writer str;
-                   flush ())
-                 s
+               (* TODO: This can potentially be factored out as a body encoder
+                  written as a stream-conduit and we can pipe the body through
+                  that body encoder. *)
+               let%lwt () =
+                 Lstream.iter
+                   ~f:(fun str ->
+                     if is_chunk then write_chunk writer (`String str)
+                     else Writer.write_string writer str;
+                     flush ())
+                   s
+               in
+               if is_chunk then (
+                 write_final_chunk writer;
+                 flush ())
+               else Lwt.return_unit
            | `Iovecs s ->
-               Lstream.iter
-                 ~f:(fun iovec ->
-                   Writer.write_iovec writer iovec;
-                   flush ())
-                 s
+               let%lwt () =
+                 Lstream.iter
+                   ~f:(fun iovec ->
+                     if is_chunk then write_chunk writer (`Iovec iovec)
+                     else Writer.write_iovec writer iovec;
+                     flush ())
+                   s
+               in
+               if is_chunk then (
+                 write_final_chunk writer;
+                 flush ())
+               else Lwt.return_unit
          in
          Body.drain req_body)

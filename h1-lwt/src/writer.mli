@@ -3,6 +3,7 @@ type t
 val create : int -> t
 val write_string : t -> string -> unit
 val write_char : t -> char -> unit
+val writef : t -> ('a, Format.formatter, unit, unit) format4 -> 'a
 val write_bigstring : t -> Bigstringaf.t -> unit
 val write_iovec : t -> Iovec.t -> unit
 val flushed : t -> unit Lwt.t

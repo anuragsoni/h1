@@ -35,6 +35,8 @@ let write_string t msg =
   t.bytes_scheduled <- t.bytes_scheduled + len;
   Bigbuffer.add_string t.buf msg
 
+let writef t fmt = Format.kasprintf (write_string t) fmt
+
 let write_char t msg =
   t.bytes_scheduled <- t.bytes_scheduled + 1;
   Bigbuffer.add_char t.buf msg
