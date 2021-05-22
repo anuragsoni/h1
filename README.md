@@ -55,7 +55,7 @@ let run (sock : Lwt_unix.file_descr) =
 ```
 
 ## Todo
-- [ ] Chunked Encoding
+- [ ] Chunked Encoding (Update: Works for request bodies now, need to implement serializer for response bodies)
 - [ ] Http client implementation
 - [ ] 0 copy streaming for bodies
 - [ ] Better error handling
