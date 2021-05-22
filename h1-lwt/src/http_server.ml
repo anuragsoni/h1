@@ -107,23 +107,6 @@ let run ~read_buf_size ~write_buf_size ~refill ~write service =
   Io.reader_stream read_buf_size refill
   |> Lstream.through request_stream
   |> Lstream.iter ~f:(fun (req, req_body) ->
-         (* https://datatracker.ietf.org/doc/html/rfc7231#section-5.1.1 Http
-            clients can send an Expect: 100-continue header for POST/PUT
-            requests. This indicates that the client wishes to receive a 100
-            (Continue) response before attempting to send (a potentially large)
-            message body.
-
-            TODO: we should allow users to configure what checks should be
-            performed here and provide a way for them to respond with an
-            Expectation failed response to exit early.
-
-            Note: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/417 *)
-         let%lwt () =
-           if Headers.client_waiting_for_100_continue (Request.headers req) then (
-             write_response writer (Response.create `Continue);
-             flush ())
-           else Lwt.return_unit
-         in
          let%lwt res, body = service (req, req_body) in
          write_response writer res;
          let is_chunk = is_chunked_response res in
