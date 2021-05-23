@@ -110,14 +110,41 @@ let ( and+ ) a b =
             b.run source on_err (fun res_b -> on_succ (res_a, res_b))));
   }
 
-let with_eof source on_err on_succ res =
-  if Source.length source < 2 then on_err Partial
-  else if
-    Bigstringaf.unsafe_memcmp_string source.buffer source.off "\r\n" 0 2 = 0
-  then (
-    Source.advance source 2;
-    on_succ res)
-  else on_err (Msg "Expected eof")
+let ( <* ) a b =
+  {
+    run =
+      (fun source on_err on_succ ->
+        a.run source on_err (fun res_a ->
+            b.run source on_err (fun _ -> on_succ res_a)));
+  }
+
+let take n =
+  let run source on_err on_succ =
+    if Source.length source < n then on_err Partial
+    else
+      let res = Source.to_string source ~off:0 ~len:n in
+      Source.advance source n;
+      on_succ res
+  in
+  { run }
+
+let string str =
+  let run source on_err on_succ =
+    let len = String.length str in
+    let rec aux idx =
+      if idx = len then (
+        Source.advance source len;
+        on_succ str)
+      else if Source.length source = 0 then on_err Partial
+      else if Source.get source idx = String.unsafe_get str idx then
+        aux (idx + 1)
+      else on_err (Msg (Printf.sprintf "Could not match: %S" str))
+    in
+    aux 0
+  in
+  { run }
+
+let eol = string "\r\n"
 
 (* token = 1*tchar
 
@@ -164,41 +191,45 @@ let version =
       match Source.get source 0 with
       | '0' ->
           Source.advance source 1;
-          with_eof source on_err on_succ H1_types.Version.Http_1_0
+          on_succ H1_types.Version.Http_1_0
       | '1' ->
           Source.advance source 1;
-          with_eof source on_err on_succ H1_types.Version.Http_1_1
+          on_succ H1_types.Version.Http_1_1
       | c -> on_err (Msg (Printf.sprintf "Invalid http version number 1.%c" c)))
     else on_err (Msg "Invalid http version header")
   in
-  { run }
+  { run } <* eol
 
-let parse_header source =
-  let pos = Source.index source ':' in
-  if pos = -1 then Error Partial
-  else if pos = 0 then Error (Msg "Invalid header: Empty header key")
-  else if Source.for_all source ~off:0 ~len:pos ~f:is_tchar then (
-    let key = Source.to_string source ~off:0 ~len:pos in
-    Source.advance source (pos + 1);
-    while Source.length source > 0 && Source.get source 0 = ' ' do
-      Source.advance source 1
-    done;
-    let pos = Source.index source '\r' in
-    if pos = -1 then Error Partial
-    else
-      let v = Source.to_string source ~off:0 ~len:pos in
-      Source.advance source pos;
-      with_eof source (fun e -> Error e) (fun v -> Ok v) (key, String.trim v))
-  else Error (Msg "Invalid Header Key")
+let header =
+  let run source on_err on_succ =
+    let pos = Source.index source ':' in
+    if pos = -1 then on_err Partial
+    else if pos = 0 then on_err (Msg "Invalid header: Empty header key")
+    else if Source.for_all source ~off:0 ~len:pos ~f:is_tchar then (
+      let key = Source.to_string source ~off:0 ~len:pos in
+      Source.advance source (pos + 1);
+      while Source.length source > 0 && Source.get source 0 = ' ' do
+        Source.advance source 1
+      done;
+      let pos = Source.index source '\r' in
+      if pos = -1 then on_err Partial
+      else
+        let v = Source.to_string source ~off:0 ~len:pos in
+        Source.advance source pos;
+        on_succ (key, String.trim v))
+    else on_err (Msg "Invalid Header Key")
+  in
+  { run } <* eol
 
 let headers =
   let run source on_err on_succ =
     let rec loop acc =
       let len = Source.length source in
       if len > 0 && Source.get source 0 = '\r' then
-        with_eof source on_err on_succ (H1_types.Headers.of_list @@ List.rev acc)
+        eol.run source on_err (fun _ ->
+            on_succ (H1_types.Headers.of_list @@ List.rev acc))
       else
-        match parse_header source with
+        match header.run source (fun e -> Error e) (fun v -> Ok v) with
         | Error e -> on_err e
         | Ok v -> loop (v :: acc)
     in
@@ -291,16 +322,12 @@ let request =
 
 let parse_chunk =
   let* chunk_length = chunk_length in
-  let run source on_err on_succ =
-    let chunk_length = Int64.to_int chunk_length in
-    if chunk_length = 0 then with_eof source on_err on_succ None
-    else if Source.length source < chunk_length + 2 then on_err Partial
-    else
-      let chunk = Source.to_string source ~off:0 ~len:chunk_length in
-      Source.advance source chunk_length;
-      with_eof source on_err on_succ (Some chunk)
-  in
-  { run }
+  if chunk_length = 0L then
+    let+ _ = eol in
+    None
+  else
+    let+ res = take (Int64.to_int chunk_length) <* eol in
+    Some res
 
 let run_parser ?off ?len buf p =
   let source = Source.of_bigstring ?off ?len buf in
