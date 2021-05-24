@@ -21,6 +21,23 @@ let map ~f t =
       | None -> Lwt.return_none
       | Some v -> Lwt.return_some (f v))
 
+let rec fold t ~init ~f =
+  match%lwt next t with
+  | None -> Lwt.return init
+  | Some x ->
+      let%lwt new_init = f init x in
+      fold t ~init:new_init ~f
+
+let take t n =
+  let rec aux n acc =
+    if n = 0 then Lwt.return (List.rev acc)
+    else
+      match%lwt next t with
+      | None -> Lwt.return (List.rev acc)
+      | Some x -> aux (n - 1) (x :: acc)
+  in
+  aux n []
+
 let rec iter ~f t =
   match%lwt next t with
   | None -> Lwt.return_unit
