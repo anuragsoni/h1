@@ -34,4 +34,5 @@
   (h1-parser
    (= :version))
   bigstringaf
-  lwt))
+  lwt
+  lwt_ppx))
