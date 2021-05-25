@@ -29,6 +29,7 @@
 (package
  (name h1-lwt)
  (depends
+  (alcotest-lwt :with-test)
   (h1-types
    (= :version))
   (h1-parser

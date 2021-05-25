@@ -6,6 +6,8 @@ val next : 'a t -> 'a option Lwt.t
 val take : 'a t -> int -> 'a list Lwt.t
 val fold : 'a t -> init:'b -> f:('b -> 'a -> 'b Lwt.t) -> 'b Lwt.t
 val map : f:('a -> 'b) -> 'a t -> 'b t
+val concat : 'a t t -> 'a t
+val concat_map : f:('a -> 'b t) -> 'a t -> 'b t
 val pushback : 'a t -> 'a -> unit
 val iter : f:('a -> unit Lwt.t) -> 'a t -> unit Lwt.t
 val drain : 'a t -> unit Lwt.t
