@@ -9,8 +9,7 @@ let body_stream req bufstream =
       let rec fn () =
         match%lwt Lstream.next bufstream with
         | None -> Lwt.return_none
-        | Some buf -> (
-            let view = Bigbuffer.consume buf in
+        | Some view -> (
             match
               H1_parser.parse_chunk ~off:view.Bigbuffer.View.pos ~len:view.len
                 view.buffer
@@ -31,8 +30,7 @@ let body_stream req bufstream =
         else
           match%lwt Lstream.next bufstream with
           | None -> Lwt.return_none
-          | Some buf ->
-              let view = Bigbuffer.consume buf in
+          | Some view ->
               let l = Int64.of_int view.Bigbuffer.View.len in
               let c = if !to_consume > l then l else !to_consume in
               to_consume := Int64.sub !to_consume c;
@@ -51,11 +49,10 @@ let request_stream bufstream =
   let rec fn () =
     match%lwt Lstream.next bufstream with
     | None -> Lwt.return_none
-    | Some buf -> (
-        let view = Bigbuffer.consume buf in
+    | Some view -> (
         match
-          H1_parser.parse_request view.Bigbuffer.View.buffer ~off:view.pos
-            ~len:view.len
+          H1_parser.parse_request view.Bigbuffer.View.buffer
+            ~off:view.Bigbuffer.View.pos ~len:view.len
         with
         | Ok (req, consumed) ->
             view.continue consumed;

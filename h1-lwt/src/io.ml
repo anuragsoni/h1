@@ -22,11 +22,11 @@ let reader_stream read_buf_size refill =
     if Bigbuffer.length read_buf > 0 && !prev_len <> Bigbuffer.length read_buf
     then (
       prev_len := Bigbuffer.length read_buf;
-      Lwt.return_some read_buf)
+      Lwt.return_some (Bigbuffer.consume read_buf))
     else (
       prev_len := Bigbuffer.length read_buf;
       match%lwt fill refill read_buf with
       | `Eof -> Lwt.return_none
-      | `Ok -> Lwt.return_some read_buf)
+      | `Ok -> Lwt.return_some (Bigbuffer.consume read_buf))
   in
   Lstream.from_fn fn
