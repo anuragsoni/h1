@@ -64,13 +64,11 @@ let write_all ~write t =
     let pending = pending t in
     if pending = 0 then Lwt.return_unit
     else
+      let view = Bigbuffer.consume t.buf in
       let%lwt count =
-        Bigbuffer.consume'
-          ~f:(fun buf ~pos ~len ->
-            let%lwt count = write buf ~pos ~len in
-            Lwt.return (count, count))
-          t.buf
+        write view.Bigbuffer.View.buffer ~pos:view.pos ~len:view.len
       in
+      view.continue count;
       t.bytes_written <- t.bytes_written + count;
       wakeup_flush_if_needed t;
       if count = pending then Lwt.return_unit else aux t

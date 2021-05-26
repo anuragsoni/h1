@@ -1,5 +1,9 @@
 let fill refill read_buf =
-  let%lwt count = Bigbuffer.fill read_buf ~f:refill in
+  let view = Bigbuffer.fill read_buf in
+  let%lwt count =
+    refill view.Bigbuffer.View.buffer ~pos:view.pos ~len:view.len
+  in
+  view.continue count;
   if count <= 0 then Lwt.return `Eof else Lwt.return `Ok
 
 let reader_stream read_buf_size refill =

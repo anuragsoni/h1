@@ -5,6 +5,17 @@ type t = {
   init : Bigstringaf.t;
 }
 
+module View = struct
+  type t = {
+    buffer : Bigstringaf.t;
+    pos : int;
+    len : int;
+    continue : int -> unit;
+  }
+
+  let make buffer ~pos ~len continue = { buffer; pos; len; continue }
+end
+
 module Logger = (val Logs.src_log (Logs.Src.create "h1_lwt.bigbuffer"))
 
 let create size =
@@ -44,13 +55,11 @@ let add_string buf s =
     ~len;
   buf.pos <- new_pos
 
-let fill ~f t =
+let fill t =
   if t.pos >= t.len then resize t 0;
-  let%lwt count =
-    f t.buffer ~pos:t.pos ~len:(Bigstringaf.length t.buffer - t.pos)
-  in
-  t.pos <- t.pos + count;
-  Lwt.return count
+  View.make t.buffer ~pos:t.pos
+    ~len:(Bigstringaf.length t.buffer - t.pos)
+    (fun count -> t.pos <- t.pos + count)
 
 let add_bigstring buf s =
   let len = Bigstringaf.length s in
@@ -67,22 +76,12 @@ let add_iovec buf iovec =
     ~dst_off:buf.pos ~len;
   buf.pos <- new_pos
 
-let consume ~f t =
-  let res, count = f t.buffer ~pos:0 ~len:t.pos in
-  if count < 0 || count > t.pos then
-    invalid_arg "Bigbuffer.consume: Invalid response from f consuming buffer.";
-  Bigstringaf.blit t.buffer ~src_off:count ~dst_off:0
-    ~len:(length t - count)
-    t.buffer;
-  t.pos <- t.pos - count;
-  res
-
-let consume' ~f t =
-  let%lwt res, count = f t.buffer ~pos:0 ~len:t.pos in
-  if count < 0 || count > t.pos then
-    invalid_arg "Bigbuffer.consume: Invalid response from f consuming buffer.";
-  Bigstringaf.blit t.buffer ~src_off:count ~dst_off:0
-    ~len:(length t - count)
-    t.buffer;
-  t.pos <- t.pos - count;
-  Lwt.return res
+let consume t =
+  View.make t.buffer ~pos:0 ~len:t.pos (fun count ->
+      if count < 0 || count > t.pos then
+        invalid_arg
+          "Bigbuffer.consume: Invalid response for bytes consumed in buffer.";
+      Bigstringaf.blit t.buffer ~src_off:count ~dst_off:0
+        ~len:(length t - count)
+        t.buffer;
+      t.pos <- t.pos - count)

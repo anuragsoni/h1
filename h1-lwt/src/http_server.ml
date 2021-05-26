@@ -10,13 +10,14 @@ let body_stream req bufstream =
         match%lwt Lstream.next bufstream with
         | None -> Lwt.return_none
         | Some buf -> (
+            let view = Bigbuffer.consume buf in
             match
-              Bigbuffer.consume buf ~f:(fun buf ~pos ~len ->
-                  match H1_parser.parse_chunk ~off:pos ~len buf with
-                  | Ok (res, c) -> (Ok res, c)
-                  | Error e -> (Error e, 0))
+              H1_parser.parse_chunk ~off:view.Bigbuffer.View.pos ~len:view.len
+                view.buffer
             with
-            | Ok chunk -> Lwt.return chunk
+            | Ok (chunk, c) ->
+                view.continue c;
+                Lwt.return chunk
             | Error Partial -> fn ()
             | Error (Msg msg) -> failwith msg)
       in
@@ -31,14 +32,15 @@ let body_stream req bufstream =
           match%lwt Lstream.next bufstream with
           | None -> Lwt.return_none
           | Some buf ->
+              let view = Bigbuffer.consume buf in
+              let l = Int64.of_int view.Bigbuffer.View.len in
+              let c = if !to_consume > l then l else !to_consume in
+              to_consume := Int64.sub !to_consume c;
+              let c' = Int64.to_int c in
               let chunk =
-                Bigbuffer.consume buf ~f:(fun buf ~pos ~len ->
-                    let l = Int64.of_int len in
-                    let c = if !to_consume > l then l else !to_consume in
-                    to_consume := Int64.sub !to_consume c;
-                    ( Bigstringaf.substring buf ~off:pos ~len:(Int64.to_int c),
-                      Int64.to_int c ))
+                Bigstringaf.substring view.buffer ~off:view.pos ~len:c'
               in
+              view.continue c';
               Lwt.return_some chunk
       in
       Lstream.from_fn fn
@@ -50,13 +52,13 @@ let request_stream bufstream =
     match%lwt Lstream.next bufstream with
     | None -> Lwt.return_none
     | Some buf -> (
+        let view = Bigbuffer.consume buf in
         match
-          Bigbuffer.consume buf ~f:(fun buf ~pos ~len ->
-              match H1_parser.parse_request buf ~off:pos ~len with
-              | Ok (req, consumed) -> (Ok req, consumed)
-              | Error e -> (Error e, 0))
+          H1_parser.parse_request view.Bigbuffer.View.buffer ~off:view.pos
+            ~len:view.len
         with
-        | Ok req ->
+        | Ok (req, consumed) ->
+            view.continue consumed;
             let body_stream = body_stream req bufstream in
             Lwt.return_some (req, `Stream body_stream)
         | Error (Msg msg) -> failwith msg
