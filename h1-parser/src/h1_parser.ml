@@ -184,19 +184,12 @@ let version =
   let run source on_err on_succ =
     if Source.length source < 8 then on_err Partial
     else if
-      Bigstringaf.unsafe_memcmp_string source.buffer source.off "HTTP/1." 0 7
+      Bigstringaf.unsafe_memcmp_string source.buffer source.off "HTTP/1.1" 0 8
       = 0
     then (
-      Source.advance source 7;
-      match Source.get source 0 with
-      | '0' ->
-          Source.advance source 1;
-          on_succ H1_types.Version.Http_1_0
-      | '1' ->
-          Source.advance source 1;
-          on_succ H1_types.Version.Http_1_1
-      | c -> on_err (Msg (Printf.sprintf "Invalid http version number 1.%c" c)))
-    else on_err (Msg "Invalid http version header")
+      Source.advance source 8;
+      on_succ H1_types.Version.Http_1_1)
+    else on_err (Msg "Invalid http version")
   in
   { run } <* eol
 

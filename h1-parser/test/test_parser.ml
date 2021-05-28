@@ -110,7 +110,7 @@ let%expect_test "Rejects any http version that isn't 1.0 or 1.1" =
   let buf = Bigstringaf.of_string req ~off:0 ~len:(String.length req) in
   let res = H1_parser.parse_request ~off:0 ~len:50 buf in
   printf "%s" @@ pp_parse_result res;
-  [%expect {| Error: Invalid http version number 1.4 |}]
+  [%expect {| Error: Invalid http version |}]
 
 let%expect_test "Parse request and report offset" =
   let buf =

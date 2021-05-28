@@ -59,3 +59,8 @@ let client_waiting_for_100_continue headers =
   | Some x when caseless_equal x "100-continue" -> true
   | Some _ -> false
   | None -> false
+
+let keep_alive headers =
+  match find headers "connection" with
+  | Some x when caseless_equal x "close" -> false
+  | _ -> true
