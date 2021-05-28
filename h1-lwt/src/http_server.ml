@@ -3,6 +3,8 @@ module Logger = (val Logs.src_log (Logs.Src.create "http.server"))
 
 type service = Request.t * Body.t -> (Response.t * Body.t) Lwt.t
 
+exception Bad_request of string option
+
 let body_stream req bufstream =
   match Headers.get_transfer_encoding (Request.headers req) with
   | `Chunked ->
@@ -18,10 +20,10 @@ let body_stream req bufstream =
                 view.continue c;
                 Lwt.return chunk
             | Error Partial -> fn ()
-            | Error (Msg msg) -> failwith msg)
+            | Error (Msg msg) -> raise (Bad_request (Some msg)))
       in
       Lstream.from_fn fn
-  | `Bad_request -> failwith "Bad request"
+  | `Bad_request -> raise (Bad_request None)
   | `Fixed 0L -> Lstream.from_fn (fun () -> Lwt.return_none)
   | `Fixed len ->
       let to_consume = ref len in
@@ -58,7 +60,7 @@ let request_stream bufstream =
             view.continue consumed;
             let body_stream = body_stream req bufstream in
             Lwt.return_some (req, `Stream body_stream)
-        | Error (Msg msg) -> failwith msg
+        | Error (Msg msg) -> raise (Bad_request (Some msg))
         | Error Partial -> fn ())
   in
   Lstream.from_fn fn
@@ -105,53 +107,70 @@ let run ~read_buf_size ~write_buf_size ~refill ~write service =
   let flush () = Writer.write_all ~write writer in
   let reader_stream = Io.reader_stream read_buf_size refill in
   let request_stream = request_stream reader_stream in
-  let rec aux () =
-    match%lwt Lstream.next request_stream with
-    | Some (req, req_body) ->
-        let%lwt res, body = service (req, req_body) in
-        write_response writer res;
-        let is_chunk = is_chunked_response res in
-        let%lwt () =
-          match body with
-          | `String s ->
-              Writer.write_string writer s;
-              flush ()
-          | `Bigstring b ->
-              Writer.write_bigstring writer b;
-              flush ()
-          | `Stream s ->
-              (* TODO: This can potentially be factored out as a body encoder
-                 written as a stream-conduit and we can pipe the body through
-                 that body encoder. *)
-              let%lwt () =
-                Lstream.iter
-                  ~f:(fun str ->
-                    if is_chunk then write_chunk writer (`String str)
-                    else Writer.write_string writer str;
+  Lwt.catch
+    (fun () ->
+      let rec aux () =
+        match%lwt Lstream.next request_stream with
+        | Some (req, req_body) ->
+            let%lwt res, body = service (req, req_body) in
+            write_response writer res;
+            let is_chunk = is_chunked_response res in
+            let%lwt () =
+              match body with
+              | `String s ->
+                  Writer.write_string writer s;
+                  flush ()
+              | `Bigstring b ->
+                  Writer.write_bigstring writer b;
+                  flush ()
+              | `Stream s ->
+                  (* TODO: This can potentially be factored out as a body
+                     encoder written as a stream-conduit and we can pipe the
+                     body through that body encoder. *)
+                  let%lwt () =
+                    Lstream.iter
+                      ~f:(fun str ->
+                        if is_chunk then write_chunk writer (`String str)
+                        else Writer.write_string writer str;
+                        flush ())
+                      s
+                  in
+                  if is_chunk then (
+                    write_final_chunk writer;
                     flush ())
-                  s
-              in
-              if is_chunk then (
-                write_final_chunk writer;
-                flush ())
-              else Lwt.return_unit
-          | `Iovecs s ->
-              let%lwt () =
-                Lstream.iter
-                  ~f:(fun iovec ->
-                    if is_chunk then write_chunk writer (`Iovec iovec)
-                    else Writer.write_iovec writer iovec;
+                  else Lwt.return_unit
+              | `Iovecs s ->
+                  let%lwt () =
+                    Lstream.iter
+                      ~f:(fun iovec ->
+                        if is_chunk then write_chunk writer (`Iovec iovec)
+                        else Writer.write_iovec writer iovec;
+                        flush ())
+                      s
+                  in
+                  if is_chunk then (
+                    write_final_chunk writer;
                     flush ())
-                  s
-              in
-              if is_chunk then (
-                write_final_chunk writer;
-                flush ())
-              else Lwt.return_unit
-        in
-        let%lwt () = Body.drain req_body in
-        if Headers.keep_alive (Request.headers req) then aux ()
-        else Lwt.return_unit
-    | None -> Lwt.return_unit
-  in
-  aux ()
+                  else Lwt.return_unit
+            in
+            let%lwt () = Body.drain req_body in
+            if Headers.keep_alive (Request.headers req) then aux ()
+            else Lwt.return_unit
+        | None -> Lwt.return_unit
+      in
+      aux ())
+    (function
+      | Bad_request msg ->
+          let response =
+            Response.create
+              ~headers:
+                (Headers.of_list
+                   [ ("Content-Length", "0"); ("Connection", "close") ])
+              `Bad_request
+          in
+          Option.iter
+            (fun msg' -> Logger.err (fun m -> m "Invalid Request: %S" msg'))
+            msg;
+          write_response writer response;
+          flush ()
+      | exn -> Lwt.fail exn)
