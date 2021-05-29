@@ -1,15 +1,5 @@
 open H1_types
 
-module H1_lwt = H1.Make (struct
-  type 'a t = 'a Lwt.t
-
-  let return x = Lwt.return x
-  let bind t ~f = Lwt.bind t f
-  let map t ~f = Lwt.map f t
-end)
-
-open H1_lwt
-
 let text =
   "CHAPTER I. Down the Rabbit-Hole  Alice was beginning to get very tired of \
    sitting by her sister on the bank, and of having nothing to do: once or \
@@ -45,10 +35,11 @@ let text = Bigstringaf.of_string text ~off:0 ~len:(String.length text)
 [@@@part "simple_server"]
 
 let run (sock : Lwt_unix.file_descr) =
+  let open H1_lwt in
   let service (_req, body) =
     let body = Body.to_string_stream body in
     let%lwt () =
-      Pull.iter
+      iter
         ~f:(fun x ->
           Logs.info (fun m -> m "%s" x);
           Lwt.return_unit)

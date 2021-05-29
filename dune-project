@@ -34,3 +34,19 @@
   (h1-parser
    (= :version))
   bigstringaf))
+
+(package
+ (name h1-lwt)
+ (depends
+  (h1
+   (= :version))
+  lwt))
+
+(package
+ (name h1-async)
+ (depends
+  (h1
+   (= :version))
+  core
+  async
+  ppx_jane))

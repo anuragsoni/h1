@@ -1,8 +1,6 @@
 open Core
 open Async
 open H1_types
-module H1_async = H1.Make (Deferred)
-open H1_async
 
 let text =
   "CHAPTER I. Down the Rabbit-Hole  Alice was beginning to get very tired of \
@@ -74,10 +72,11 @@ let rec write fd buf ~pos ~len =
       raise exn
 
 let run (sock : Fd.t) =
+  let open H1_async in
   let service (_req, body) =
     let body = Body.to_string_stream body in
     let%bind () =
-      Pull.iter
+      iter
         ~f:(fun x ->
           Logs.info (fun m -> m "%s" x);
           return ())
@@ -98,15 +97,21 @@ let run (sock : Fd.t) =
     service
 
 let run ~port =
-  let (_ : (Socket.Address.Inet.t, int) Tcp.Server.t) =
-    Tcp.Server.create_sock_inet ~on_handler_error:`Ignore
+  let (server : (Socket.Address.Inet.t, int) Tcp.Server.t) =
+    Tcp.Server.create_sock_inet ~backlog:11_000 ~on_handler_error:`Ignore
       (Tcp.Where_to_listen.of_port port) (fun _addr sock ->
         let fd = Socket.fd sock in
         run fd)
   in
+  Deferred.forever () (fun () ->
+      Clock.after Time.Span.(of_sec 0.5) >>| fun () ->
+      Log.Global.printf "conns: %d" (Tcp.Server.num_connections server));
   Deferred.never ()
 
 let () =
+  Fmt_tty.setup_std_outputs ();
+  Logs.set_reporter (Logs_fmt.reporter ());
+  Logs.set_level (Some Debug);
   Command.async ~summary:"Start an echo server"
     Command.Let_syntax.(
       let%map_open port =
