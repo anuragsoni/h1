@@ -85,3 +85,5 @@ let consume t =
         ~len:(length t - count)
         t.buffer;
       t.pos <- t.pos - count)
+
+let addf t fmt = Format.kasprintf (add_string t) fmt

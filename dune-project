@@ -27,13 +27,10 @@
   (ppx_assert :with-test)))
 
 (package
- (name h1-lwt)
+ (name h1)
  (depends
-  (alcotest-lwt :with-test)
   (h1-types
    (= :version))
   (h1-parser
    (= :version))
-  bigstringaf
-  lwt
-  lwt_ppx))
+  bigstringaf))

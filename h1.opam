@@ -2,12 +2,9 @@
 opam-version: "2.0"
 depends: [
   "dune" {>= "2.8"}
-  "alcotest-lwt" {with-test}
   "h1-types" {= version}
   "h1-parser" {= version}
   "bigstringaf"
-  "lwt"
-  "lwt_ppx"
   "odoc" {with-doc}
 ]
 build: [

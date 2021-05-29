@@ -1,5 +1,13 @@
 (executable
  (name main)
+ (modules main)
  (preprocess
   (pps lwt_ppx))
- (libraries lwt.unix h1-lwt logs.fmt fmt.tty))
+ (libraries lwt.unix h1 logs.fmt fmt.tty))
+
+(executable
+ (name main_async)
+ (modules main_async)
+ (preprocess
+  (pps ppx_jane))
+ (libraries core async h1 logs.fmt fmt.tty))

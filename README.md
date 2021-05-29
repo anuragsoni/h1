@@ -26,7 +26,7 @@ let run (sock : Lwt_unix.file_descr) =
   let service (_req, body) =
     let body = Body.to_string_stream body in
     let%lwt () =
-      Lstream.iter
+      Pull.iter
         ~f:(fun x ->
           Logs.info (fun m -> m "%s" x);
           Lwt.return_unit)
