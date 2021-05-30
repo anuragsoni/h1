@@ -79,8 +79,8 @@ let run (sock : Fd.t) =
     return (resp, `Bigstring text)
   in
   H1_async.run_server ~read_buf_size:(10 * 1024) ~write_buf_size:(10 * 1024)
-    ~write:(fun buf ~pos ~len -> write sock buf ~pos ~len)
-    ~refill:(fun buf ~pos ~len -> read sock buf ~pos ~len)
+    ~write:(fun buf ~pos ~len -> H1_async.write_nonblock sock buf ~pos ~len)
+    ~refill:(fun buf ~pos ~len -> H1_async.read_nonblock sock buf ~pos ~len)
     service
 ```
 
