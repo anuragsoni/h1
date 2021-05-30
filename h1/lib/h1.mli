@@ -32,17 +32,15 @@ module type ASYNC = sig
     val to_string_stream : t -> (string, [ `Async ]) stream
   end
 
-  module Http_server : sig
-    type service = Request.t * Body.t -> (Response.t * Body.t) promise
+  type service = Request.t * Body.t -> (Response.t * Body.t) promise
 
-    val run :
-      read_buf_size:int ->
-      write_buf_size:int ->
-      refill:(Bigstringaf.t -> pos:int -> len:int -> int promise) ->
-      write:(Bigstringaf.t -> pos:int -> len:int -> int promise) ->
-      service ->
-      unit promise
-  end
+  val run_server :
+    read_buf_size:int ->
+    write_buf_size:int ->
+    refill:(Bigstringaf.t -> pos:int -> len:int -> int promise) ->
+    write:(Bigstringaf.t -> pos:int -> len:int -> int promise) ->
+    service ->
+    unit promise
 end
 
 module Async (IO : IO) : ASYNC with type 'a promise := 'a IO.t

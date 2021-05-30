@@ -31,17 +31,15 @@ module type ASYNC = sig
     val to_string_stream : t -> (string, [ `Async ]) stream
   end
 
-  module Http_server : sig
-    type service = Request.t * Body.t -> (Response.t * Body.t) promise
+  type service = Request.t * Body.t -> (Response.t * Body.t) promise
 
-    val run :
-      read_buf_size:int ->
-      write_buf_size:int ->
-      refill:(Bigstringaf.t -> pos:int -> len:int -> int promise) ->
-      write:(Bigstringaf.t -> pos:int -> len:int -> int promise) ->
-      service ->
-      unit promise
-  end
+  val run_server :
+    read_buf_size:int ->
+    write_buf_size:int ->
+    refill:(Bigstringaf.t -> pos:int -> len:int -> int promise) ->
+    write:(Bigstringaf.t -> pos:int -> len:int -> int promise) ->
+    service ->
+    unit promise
 end
 
 module Async (IO : IO) = struct
@@ -63,14 +61,12 @@ module Async (IO : IO) = struct
     let drain t = IO.of_cps (drain t)
   end
 
-  module Http_server = struct
-    type service = Request.t * Body.t -> (Response.t * Body.t) IO.t
+  type service = Request.t * Body.t -> (Response.t * Body.t) IO.t
 
-    let run ~read_buf_size ~write_buf_size ~refill ~write service =
-      let write buf ~pos ~len = IO.to_cps (write buf ~pos ~len) in
-      let refill buf ~pos ~len = IO.to_cps (refill buf ~pos ~len) in
-      let service req = IO.to_cps (service req) in
-      IO.of_cps
-      @@ Http_server.run ~read_buf_size ~write_buf_size ~write ~refill service
-  end
+  let run_server ~read_buf_size ~write_buf_size ~refill ~write service =
+    let write buf ~pos ~len = IO.to_cps (write buf ~pos ~len) in
+    let refill buf ~pos ~len = IO.to_cps (refill buf ~pos ~len) in
+    let service req = IO.to_cps (service req) in
+    IO.of_cps
+    @@ Http_server.run ~read_buf_size ~write_buf_size ~write ~refill service
 end

@@ -72,11 +72,10 @@ let rec write fd buf ~pos ~len =
       raise exn
 
 let run (sock : Fd.t) =
-  let open H1_async in
   let service (_req, body) =
-    let body = Body.to_string_stream body in
+    let body = H1_async.Body.to_string_stream body in
     let%bind () =
-      iter
+      H1_async.iter
         ~f:(fun x ->
           Logs.info (fun m -> m "%s" x);
           return ())
@@ -91,7 +90,7 @@ let run (sock : Fd.t) =
     in
     return (resp, `Bigstring text)
   in
-  Http_server.run ~read_buf_size:(10 * 1024) ~write_buf_size:(10 * 1024)
+  H1_async.run_server ~read_buf_size:(10 * 1024) ~write_buf_size:(10 * 1024)
     ~write:(fun buf ~pos ~len -> write sock buf ~pos ~len)
     ~refill:(fun buf ~pos ~len -> read sock buf ~pos ~len)
     service

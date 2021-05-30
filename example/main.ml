@@ -35,11 +35,10 @@ let text = Bigstringaf.of_string text ~off:0 ~len:(String.length text)
 [@@@part "simple_server"]
 
 let run (sock : Lwt_unix.file_descr) =
-  let open H1_lwt in
   let service (_req, body) =
-    let body = Body.to_string_stream body in
+    let body = H1_lwt.Body.to_string_stream body in
     let%lwt () =
-      iter
+      H1_lwt.iter
         ~f:(fun x ->
           Logs.info (fun m -> m "%s" x);
           Lwt.return_unit)
@@ -56,7 +55,7 @@ let run (sock : Lwt_unix.file_descr) =
   in
   Lwt.catch
     (fun () ->
-      Http_server.run ~read_buf_size:(10 * 1024) ~write_buf_size:(10 * 1024)
+      H1_lwt.run_server ~read_buf_size:(10 * 1024) ~write_buf_size:(10 * 1024)
         ~write:(fun buf ~pos ~len -> Lwt_bytes.write sock buf pos len)
         ~refill:(fun buf ~pos ~len -> Lwt_bytes.read sock buf pos len)
         service)
