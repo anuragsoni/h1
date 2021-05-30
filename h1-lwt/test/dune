@@ -1,6 +1,0 @@
-(tests
- (names test_stream)
- (preprocess
-  (pps lwt_ppx))
- (package h1-lwt)
- (libraries lwt.unix h1-lwt alcotest-lwt))

@@ -1,3 +1,5 @@
+open Core
+open Async
 open H1_types
 
 let text =
@@ -32,62 +34,90 @@ let text =
 
 let text = Bigstringaf.of_string text ~off:0 ~len:(String.length text)
 
-[@@@part "simple_server"]
+let rec read fd buf ~pos ~len =
+  let open Unix.Error in
+  match
+    Fd.syscall fd ~nonblocking:true (fun file_descr ->
+        Unix.Syscall_result.Int.ok_or_unix_error_exn ~syscall_name:"read"
+          (Bigstring_unix.read_assume_fd_is_nonblocking file_descr buf ~pos ~len))
+  with
+  | `Already_closed | `Ok 0 -> return 0
+  | `Ok n -> return n
+  | `Error (Unix.Unix_error ((EWOULDBLOCK | EAGAIN), _, _)) -> (
+      Fd.ready_to fd `Read >>= function
+      | `Bad_fd -> failwith "Bad fd"
+      | `Closed -> return 0
+      | `Ready -> read fd buf ~pos ~len)
+  | `Error (Unix.Unix_error (EBADF, _, _)) -> failwith "Bad fd"
+  | `Error exn ->
+      don't_wait_for (Fd.close fd);
+      raise exn
 
-let run (sock : Lwt_unix.file_descr) =
-  let open H1_lwt in
+let rec write fd buf ~pos ~len =
+  let open Unix.Error in
+  match
+    Fd.syscall fd ~nonblocking:true (fun file_descr ->
+        Bigstring_unix.write_assume_fd_is_nonblocking file_descr buf ~pos ~len)
+  with
+  | `Already_closed | `Ok 0 -> return 0
+  | `Ok n -> return n
+  | `Error (Unix.Unix_error ((EWOULDBLOCK | EAGAIN), _, _)) -> (
+      Fd.ready_to fd `Write >>= function
+      | `Bad_fd -> failwith "Bad fd"
+      | `Closed -> return 0
+      | `Ready -> write fd buf ~pos ~len)
+  | `Error (Unix.Unix_error (EBADF, _, _)) -> failwith "Bad fd"
+  | `Error exn ->
+      don't_wait_for (Fd.close fd);
+      raise exn
+
+let run (sock : Fd.t) =
+  let open H1_async in
   let service (_req, body) =
     let body = Body.to_string_stream body in
-    let%lwt () =
+    let%bind () =
       iter
         ~f:(fun x ->
           Logs.info (fun m -> m "%s" x);
-          Lwt.return_unit)
+          return ())
         body
     in
     let resp =
       Response.create
         ~headers:
           (Headers.of_list
-             [ ("Content-Length", Int.to_string (Bigstringaf.length text)) ])
+             [ ("Content-Length", Int.to_string (Bigstring.length text)) ])
         `Ok
     in
-    Lwt.return (resp, `Bigstring text)
+    return (resp, `Bigstring text)
   in
-  Lwt.catch
-    (fun () ->
-      Http_server.run ~read_buf_size:(10 * 1024) ~write_buf_size:(10 * 1024)
-        ~write:(fun buf ~pos ~len -> Lwt_bytes.write sock buf pos len)
-        ~refill:(fun buf ~pos ~len -> Lwt_bytes.read sock buf pos len)
-        service)
-    (fun exn ->
-      Logs.err (fun m -> m "%s" (Printexc.to_string exn));
-      Lwt.return_unit)
+  Http_server.run ~read_buf_size:(10 * 1024) ~write_buf_size:(10 * 1024)
+    ~write:(fun buf ~pos ~len -> write sock buf ~pos ~len)
+    ~refill:(fun buf ~pos ~len -> read sock buf ~pos ~len)
+    service
 
-[@@@part "simple_server"]
-
-let main port =
-  let rec log_stats () =
-    let stat = Gc.stat () in
-    Logs.info (fun m ->
-        m "Major collections: %d, Minor collections: %d" stat.major_collections
-          stat.minor_collections);
-    let%lwt () = Lwt_unix.sleep 5. in
-    log_stats ()
+let run ~port =
+  let (server : (Socket.Address.Inet.t, int) Tcp.Server.t) =
+    Tcp.Server.create_sock_inet ~backlog:11_000 ~on_handler_error:`Ignore
+      (Tcp.Where_to_listen.of_port port) (fun _addr sock ->
+        let fd = Socket.fd sock in
+        run fd)
   in
-  Lwt.async log_stats;
-  let open Lwt.Infix in
-  let listen_address = Unix.(ADDR_INET (inet_addr_loopback, port)) in
-  Lwt.async (fun () ->
-      Lwt_io.establish_server_with_client_socket ~backlog:11_000 listen_address
-        (fun _ sock -> run sock)
-      >>= fun _server -> Lwt.return_unit);
-  let forever, _ = Lwt.wait () in
-  Lwt_main.run forever
+  Deferred.forever () (fun () ->
+      Clock.after Time.Span.(of_sec 0.5) >>| fun () ->
+      Log.Global.printf "conns: %d" (Tcp.Server.num_connections server));
+  Deferred.never ()
 
 let () =
-  Printexc.record_backtrace true;
   Fmt_tty.setup_std_outputs ();
   Logs.set_reporter (Logs_fmt.reporter ());
   Logs.set_level (Some Debug);
-  Lwt_main.run (main 8080)
+  Command.async ~summary:"Start an echo server"
+    Command.Let_syntax.(
+      let%map_open port =
+        flag "-port"
+          (optional_with_default 8080 int)
+          ~doc:" Port to listen on (default 8080)"
+      in
+      fun () -> run ~port)
+  |> Command.run

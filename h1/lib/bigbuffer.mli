@@ -22,3 +22,4 @@ val fill : t -> View.t
 val consume : t -> View.t
 val add_bigstring : t -> Bigstringaf.t -> unit
 val add_iovec : t -> Iovec.t -> unit
+val addf : t -> ('a, Format.formatter, unit, unit) format4 -> 'a

@@ -1,4 +1,6 @@
-type 'a t = { next : unit -> 'a option Lwt.t; pushback : 'a -> unit }
+open Cps.Syntax
+
+type 'a t = { next : unit -> 'a option Cps.t; pushback : 'a -> unit }
 
 let from_fn fn =
   let pushback_bag = ref [] in
@@ -6,7 +8,7 @@ let from_fn fn =
     match !pushback_bag with
     | x :: xs ->
         pushback_bag := xs;
-        Lwt.return_some x
+        Cps.return (Some x)
     | [] -> fn ()
   in
   let pushback x = pushback_bag := x :: !pushback_bag in
@@ -16,65 +18,64 @@ let next t = t.next ()
 let pushback t v = t.pushback v
 
 let concat ts =
-  let current = ref (from_fn (fun () -> Lwt.return_none)) in
+  let current = ref (from_fn (fun () -> Cps.return None)) in
   let rec aux () =
-    match%lwt next !current with
+    let* n = next !current in
+    match n with
     | None -> (
-        match%lwt next ts with
-        | None -> Lwt.return_none
+        let* n' = next ts in
+        match n' with
+        | None -> Cps.return None
         | Some next_stream ->
             current := next_stream;
             aux ())
-    | Some xs -> Lwt.return_some xs
+    | Some xs -> Cps.return (Some xs)
   in
   from_fn aux
 
 let map ~f t =
   from_fn (fun () ->
-      match%lwt next t with
-      | None -> Lwt.return_none
-      | Some v -> Lwt.return_some (f v))
+      let* n = next t in
+      match n with None -> Cps.return None | Some v -> Cps.return (Some (f v)))
 
 let concat_map ~f t = concat (map ~f t)
 
 let rec fold t ~init ~f =
-  match%lwt next t with
-  | None -> Lwt.return init
+  let* n = next t in
+  match n with
+  | None -> Cps.return init
   | Some x ->
-      let%lwt new_init = f init x in
+      let* new_init = f init x in
       fold t ~init:new_init ~f
 
 let take t n =
   let rec aux n acc =
-    if n = 0 then Lwt.return (List.rev acc)
+    if n = 0 then Cps.return (List.rev acc)
     else
-      match%lwt next t with
-      | None -> Lwt.return (List.rev acc)
+      let* next' = next t in
+      match next' with
+      | None -> Cps.return (List.rev acc)
       | Some x -> aux (n - 1) (x :: acc)
   in
   aux n []
 
 let rec iter ~f t =
-  match%lwt next t with
-  | None -> Lwt.return_unit
+  let* n = next t in
+  match n with
+  | None -> Cps.return ()
   | Some v ->
-      let%lwt () = f v in
+      let* () = f v in
       iter ~f t
 
-let rec drain t =
-  match%lwt next t with None -> Lwt.return_unit | Some _ -> drain t
+let drain t = iter ~f:(fun _ -> Cps.return ()) t
 
 let of_list xs =
   let xs = ref xs in
   let fn () =
     match !xs with
-    | [] -> Lwt.return_none
+    | [] -> Cps.return None
     | x :: xs' ->
         xs := xs';
-        Lwt.return_some x
+        Cps.return (Some x)
   in
   from_fn fn
-
-type ('a, 'b) conduit = 'a t -> 'b t
-
-let through conduit t = conduit t
