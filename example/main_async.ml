@@ -34,44 +34,8 @@ let text =
 
 let text = Bigstringaf.of_string text ~off:0 ~len:(String.length text)
 
-let rec read fd buf ~pos ~len =
-  let open Unix.Error in
-  match
-    Fd.syscall fd ~nonblocking:true (fun file_descr ->
-        Unix.Syscall_result.Int.ok_or_unix_error_exn ~syscall_name:"read"
-          (Bigstring_unix.read_assume_fd_is_nonblocking file_descr buf ~pos ~len))
-  with
-  | `Already_closed | `Ok 0 -> return 0
-  | `Ok n -> return n
-  | `Error (Unix.Unix_error ((EWOULDBLOCK | EAGAIN), _, _)) -> (
-      Fd.ready_to fd `Read >>= function
-      | `Bad_fd -> failwith "Bad fd"
-      | `Closed -> return 0
-      | `Ready -> read fd buf ~pos ~len)
-  | `Error (Unix.Unix_error (EBADF, _, _)) -> failwith "Bad fd"
-  | `Error exn ->
-      don't_wait_for (Fd.close fd);
-      raise exn
-
-let rec write fd buf ~pos ~len =
-  let open Unix.Error in
-  match
-    Fd.syscall fd ~nonblocking:true (fun file_descr ->
-        Bigstring_unix.write_assume_fd_is_nonblocking file_descr buf ~pos ~len)
-  with
-  | `Already_closed | `Ok 0 -> return 0
-  | `Ok n -> return n
-  | `Error (Unix.Unix_error ((EWOULDBLOCK | EAGAIN), _, _)) -> (
-      Fd.ready_to fd `Write >>= function
-      | `Bad_fd -> failwith "Bad fd"
-      | `Closed -> return 0
-      | `Ready -> write fd buf ~pos ~len)
-  | `Error (Unix.Unix_error (EBADF, _, _)) -> failwith "Bad fd"
-  | `Error exn ->
-      don't_wait_for (Fd.close fd);
-      raise exn
-
 [@@@part "simple_server"]
+
 let run (sock : Fd.t) =
   let service (_req, body) =
     let body = H1_async.Body.to_string_stream body in
@@ -92,9 +56,10 @@ let run (sock : Fd.t) =
     return (resp, `Bigstring text)
   in
   H1_async.run_server ~read_buf_size:(10 * 1024) ~write_buf_size:(10 * 1024)
-    ~write:(fun buf ~pos ~len -> write sock buf ~pos ~len)
-    ~refill:(fun buf ~pos ~len -> read sock buf ~pos ~len)
+    ~write:(fun buf ~pos ~len -> H1_async.write_nonblock sock buf ~pos ~len)
+    ~refill:(fun buf ~pos ~len -> H1_async.read_nonblock sock buf ~pos ~len)
     service
+
 [@@@part "simple_server"]
 
 let run ~port =
