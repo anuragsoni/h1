@@ -6,6 +6,11 @@
 
 (generate_opam_files true)
 
+(source
+ (github anuragsoni/h1))
+
+(license MIT)
+
 (package
  (name h1-types)
  (depends
@@ -20,6 +25,7 @@
    (= :version))
   bigstringaf
   (ppx_expect :with-test)
+  (mdx :with-test)
   (base :with-test)
   (stdio :with-test)
   (ppx_sexp_conv :with-test)
