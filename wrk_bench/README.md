@@ -5,3 +5,8 @@ Benchmark run on an Intel NUC with an i7-8559U cpu running Ubuntu 20.04 (kernel 
 Rust program compiled via `cargo bench --release`. Rust version `rustc 1.52.1 (9bc8c42bb 2021-05-09)`
 
 OCaml program is location in the example folder in this repo. It was run on OCaml version 4.12.0 with flambda enabled.
+
+Both rust and ocaml benchmarks were run in two separate configuations:
+
+* One run was made where the handler returns as soon as it can
+* Second run was made where there is a 1ms delay before a handler can respond
