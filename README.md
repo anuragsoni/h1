@@ -1,6 +1,7 @@
-# H1-lwt
+# H1
 
-h1-lwt is a simple http 1.1 implementation for [lwt](https://ocsigen.org/lwt/latest/manual/manual).
+h1 is a simple http 1.1 implementation. The core protocol layout doesn't enforce any concurrency strategry
+and as a result it is possible to provide small translation modules that can provide an Lwt or Async aware interface.
 
 
 ### Warning
@@ -12,22 +13,23 @@ That said, the approach seems to work well and in my initial tests the performan
 * Execution environment agnostic.
     * The library should work on unix, windows and mirageOS, just provide the following functions when creating a connection:
         ```ocaml
-        write:(Bigstringaf.t -> pos:int -> len:int -> int Lwt.t)
-        refill:(Bigstringaf.t -> pos:int -> len:int -> int Lwt.t)
+        write:(Bigstringaf.t -> pos:int -> len:int -> int promise)
+        refill:(Bigstringaf.t -> pos:int -> len:int -> int promise)
         ```
 
 ## Usage
 
 ### HTTP Server
 
+Example using lwt:
+
 <!-- $MDX file=example/main.ml,part=simple_server -->
 ```ocaml
 let run (sock : Lwt_unix.file_descr) =
-  let open H1_lwt in
   let service (_req, body) =
-    let body = Body.to_string_stream body in
+    let body = H1_lwt.Body.to_string_stream body in
     let%lwt () =
-      iter
+      H1_lwt.iter
         ~f:(fun x ->
           Logs.info (fun m -> m "%s" x);
           Lwt.return_unit)
@@ -44,13 +46,42 @@ let run (sock : Lwt_unix.file_descr) =
   in
   Lwt.catch
     (fun () ->
-      Http_server.run ~read_buf_size:(10 * 1024) ~write_buf_size:(10 * 1024)
+      H1_lwt.run_server ~read_buf_size:(10 * 1024) ~write_buf_size:(10 * 1024)
         ~write:(fun buf ~pos ~len -> Lwt_bytes.write sock buf pos len)
         ~refill:(fun buf ~pos ~len -> Lwt_bytes.read sock buf pos len)
         service)
     (fun exn ->
       Logs.err (fun m -> m "%s" (Printexc.to_string exn));
       Lwt.return_unit)
+```
+
+Example using async:
+
+<!-- $MDX file=example/main_async.ml,part=simple_server -->
+```ocaml
+let run (sock : Fd.t) =
+  let service (_req, body) =
+    let body = H1_async.Body.to_string_stream body in
+    let%bind () =
+      H1_async.iter
+        ~f:(fun x ->
+          Logs.info (fun m -> m "%s" x);
+          return ())
+        body
+    in
+    let resp =
+      Response.create
+        ~headers:
+          (Headers.of_list
+             [ ("Content-Length", Int.to_string (Bigstring.length text)) ])
+        `Ok
+    in
+    return (resp, `Bigstring text)
+  in
+  H1_async.run_server ~read_buf_size:(10 * 1024) ~write_buf_size:(10 * 1024)
+    ~write:(fun buf ~pos ~len -> write sock buf ~pos ~len)
+    ~refill:(fun buf ~pos ~len -> read sock buf ~pos ~len)
+    service
 ```
 
 ## Todo

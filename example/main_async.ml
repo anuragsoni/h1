@@ -71,6 +71,7 @@ let rec write fd buf ~pos ~len =
       don't_wait_for (Fd.close fd);
       raise exn
 
+[@@@part "simple_server"]
 let run (sock : Fd.t) =
   let service (_req, body) =
     let body = H1_async.Body.to_string_stream body in
@@ -94,6 +95,7 @@ let run (sock : Fd.t) =
     ~write:(fun buf ~pos ~len -> write sock buf ~pos ~len)
     ~refill:(fun buf ~pos ~len -> read sock buf ~pos ~len)
     service
+[@@@part "simple_server"]
 
 let run ~port =
   let (server : (Socket.Address.Inet.t, int) Tcp.Server.t) =
