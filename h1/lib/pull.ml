@@ -1,4 +1,4 @@
-open Cps.Syntax
+open Cps.Monad_infix
 
 type 'a t = { next : unit -> 'a option Cps.t; pushback : 'a -> unit }
 
@@ -20,11 +20,9 @@ let pushback t v = t.pushback v
 let concat ts =
   let current = ref (from_fn (fun () -> Cps.return None)) in
   let rec aux () =
-    let* n = next !current in
-    match n with
+    next !current >>= function
     | None -> (
-        let* n' = next ts in
-        match n' with
+        next ts >>= function
         | None -> Cps.return None
         | Some next_stream ->
             current := next_stream;
@@ -35,37 +33,31 @@ let concat ts =
 
 let map ~f t =
   from_fn (fun () ->
-      let* n = next t in
-      match n with None -> Cps.return None | Some v -> Cps.return (Some (f v)))
+      next t >>= function
+      | None -> Cps.return None
+      | Some v -> Cps.return (Some (f v)))
 
 let concat_map ~f t = concat (map ~f t)
 
 let rec fold t ~init ~f =
-  let* n = next t in
-  match n with
+  next t >>= function
   | None -> Cps.return init
-  | Some x ->
-      let* new_init = f init x in
-      fold t ~init:new_init ~f
+  | Some x -> f init x >>= fun new_init -> fold t ~init:new_init ~f
 
 let take t n =
   let rec aux n acc =
     if n = 0 then Cps.return (List.rev acc)
     else
-      let* next' = next t in
-      match next' with
+      next t >>= function
       | None -> Cps.return (List.rev acc)
       | Some x -> aux (n - 1) (x :: acc)
   in
   aux n []
 
 let rec iter ~f t =
-  let* n = next t in
-  match n with
+  next t >>= function
   | None -> Cps.return ()
-  | Some v ->
-      let* () = f v in
-      iter ~f t
+  | Some v -> f v >>= fun () -> iter ~f t
 
 let drain t = iter ~f:(fun _ -> Cps.return ()) t
 

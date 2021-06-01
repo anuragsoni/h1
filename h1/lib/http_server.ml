@@ -1,13 +1,11 @@
-open Cps.Syntax
+open Cps.Monad_infix
 open H1_types
-module Logger = (val Logs.src_log (Logs.Src.create "http.server"))
 
 module Transport = struct
   let fill refill read_buf =
     let view = Bigbuffer.fill read_buf in
-    let* count =
-      refill view.Bigbuffer.View.buffer ~pos:view.pos ~len:view.len
-    in
+    refill view.Bigbuffer.View.buffer ~pos:view.pos ~len:view.len
+    >>= fun count ->
     view.continue count;
     if count <= 0 then Cps.return `Eof else Cps.return `Ok
 
@@ -30,8 +28,7 @@ module Transport = struct
         Cps.return (Some (Bigbuffer.consume read_buf)))
       else (
         prev_len := Bigbuffer.length read_buf;
-        let* res = fill refill read_buf in
-        match res with
+        fill refill read_buf >>= function
         | `Eof -> Cps.return None
         | `Ok -> Cps.return (Some (Bigbuffer.consume read_buf)))
     in
@@ -40,14 +37,11 @@ end
 
 type service = Request.t * Body.t -> (Response.t * Body.t) Cps.t
 
-exception Bad_request of string option
-
 let body_stream req bufstream =
   match Headers.get_transfer_encoding (Request.headers req) with
   | `Chunked ->
       let rec fn () =
-        let* n = Pull.next bufstream in
-        match n with
+        Pull.next bufstream >>= function
         | None -> Cps.return None
         | Some view -> (
             match
@@ -58,18 +52,19 @@ let body_stream req bufstream =
                 view.continue c;
                 Cps.return chunk
             | Error Partial -> fn ()
-            | Error (Msg msg) -> raise (Bad_request (Some msg)))
+            | Error (Msg msg) ->
+                Cps.fail (Base.Error.createf "Bad Request: %S" msg))
       in
       Pull.from_fn fn
-  | `Bad_request -> raise (Bad_request None)
+  | `Bad_request ->
+      Pull.from_fn (fun () -> Cps.fail (Base.Error.of_string "Bad Request"))
   | `Fixed 0L -> Pull.from_fn (fun () -> Cps.return None)
   | `Fixed len ->
       let to_consume = ref len in
       let fn () =
         if !to_consume <= 0L then Cps.return None
         else
-          let* n = Pull.next bufstream in
-          match n with
+          Pull.next bufstream >>= function
           | None -> Cps.return None
           | Some view ->
               let l = Int64.of_int view.Bigbuffer.View.len in
@@ -88,8 +83,7 @@ let request_stream bufstream =
   (* TODO: Add some checks to ensure that we don't consume > UPPER_BOUND bytes
      to process a single request *)
   let rec fn () =
-    let* n = Pull.next bufstream in
-    match n with
+    Pull.next bufstream >>= function
     | None -> Cps.return None
     | Some view -> (
         match
@@ -100,7 +94,7 @@ let request_stream bufstream =
             view.continue consumed;
             let body_stream = body_stream req bufstream in
             Cps.return (Some (req, `Stream body_stream))
-        | Error (Msg msg) -> raise (Bad_request (Some msg))
+        | Error (Msg msg) -> Cps.fail (Base.Error.createf "Bad Request: %S" msg)
         | Error Partial -> fn ())
   in
   Pull.from_fn fn
@@ -148,9 +142,8 @@ let write_all ~write buf =
     if pending = 0 then Cps.return ()
     else
       let view = Bigbuffer.consume buf in
-      let* count =
-        write view.Bigbuffer.View.buffer ~pos:view.pos ~len:view.len
-      in
+      write view.Bigbuffer.View.buffer ~pos:view.pos ~len:view.len
+      >>= fun count ->
       view.continue count;
       if count = pending then Cps.return () else aux ()
   in
@@ -162,13 +155,11 @@ let run ~read_buf_size ~write_buf_size ~refill ~write service =
   let reader_stream = Transport.reader_stream read_buf_size refill in
   let request_stream = request_stream reader_stream in
   let rec aux () =
-    let* next_req = Pull.next request_stream in
-    match next_req with
+    Pull.next request_stream >>= function
     | Some (req, req_body) ->
-        let* res, body = service (req, req_body) in
-        write_response writer res;
-        let is_chunk = is_chunked_response res in
-        let* () =
+        ( service (req, req_body) >>= fun (res, body) ->
+          write_response writer res;
+          let is_chunk = is_chunked_response res in
           match body with
           | `String s ->
               Bigbuffer.add_string writer s;
@@ -180,33 +171,31 @@ let run ~read_buf_size ~write_buf_size ~refill ~write service =
               (* TODO: This can potentially be factored out as a body encoder
                  written as a stream-conduit and we can pipe the body through
                  that body encoder. *)
-              let* () =
-                Pull.iter
-                  ~f:(fun str ->
-                    if is_chunk then write_chunk writer (`String str)
-                    else Bigbuffer.add_string writer str;
-                    flush ())
-                  s
-              in
+              Pull.iter
+                ~f:(fun str ->
+                  if is_chunk then write_chunk writer (`String str)
+                  else Bigbuffer.add_string writer str;
+                  flush ())
+                s
+              >>= fun () ->
               if is_chunk then (
                 write_final_chunk writer;
                 flush ())
               else Cps.return ()
           | `Iovecs s ->
-              let* () =
-                Pull.iter
-                  ~f:(fun iovec ->
-                    if is_chunk then write_chunk writer (`Iovec iovec)
-                    else Bigbuffer.add_iovec writer iovec;
-                    flush ())
-                  s
-              in
+              Pull.iter
+                ~f:(fun iovec ->
+                  if is_chunk then write_chunk writer (`Iovec iovec)
+                  else Bigbuffer.add_iovec writer iovec;
+                  flush ())
+                s
+              >>= fun () ->
               if is_chunk then (
                 write_final_chunk writer;
                 flush ())
-              else Cps.return ()
-        in
-        let* () = Body.drain req_body in
+              else Cps.return () )
+        >>= fun () ->
+        Body.drain req_body >>= fun () ->
         if Headers.keep_alive (Request.headers req) then aux ()
         else Cps.return ()
     | None -> Cps.return ()

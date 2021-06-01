@@ -39,11 +39,11 @@ let text = Bigstringaf.of_string text ~off:0 ~len:(String.length text)
 let run (sock : Fd.t) =
   let service (_req, body) =
     let body = H1_async.Body.to_string_stream body in
-    let%bind () =
+    let%bind.Deferred.Or_error () =
       H1_async.iter
         ~f:(fun x ->
           Logs.info (fun m -> m "%s" x);
-          return ())
+          Deferred.Or_error.return ())
         body
     in
     let resp =
@@ -53,7 +53,7 @@ let run (sock : Fd.t) =
              [ ("Content-Length", Int.to_string (Bigstring.length text)) ])
         `Ok
     in
-    return (resp, `Bigstring text)
+    return (Ok (resp, `Bigstring text))
   in
   H1_async.run_server ~read_buf_size:(10 * 1024) ~write_buf_size:(10 * 1024)
     ~write:(fun buf ~pos ~len -> H1_async.write_nonblock sock buf ~pos ~len)
@@ -67,7 +67,7 @@ let run ~port =
     Tcp.Server.create_sock_inet ~backlog:11_000 ~on_handler_error:`Ignore
       (Tcp.Where_to_listen.of_port port) (fun _addr sock ->
         let fd = Socket.fd sock in
-        run fd)
+        run fd >>| function Ok () -> () | Error e -> Error.raise e)
   in
   Deferred.forever () (fun () ->
       Clock.after Time.Span.(of_sec 0.5) >>| fun () ->

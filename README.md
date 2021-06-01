@@ -28,13 +28,12 @@ Example using lwt:
 let run (sock : Lwt_unix.file_descr) =
   let service (_req, body) =
     let body = H1_lwt.Body.to_string_stream body in
-    let%lwt () =
-      H1_lwt.iter
-        ~f:(fun x ->
-          Logs.info (fun m -> m "%s" x);
-          Lwt.return_unit)
-        body
-    in
+    H1_lwt.iter
+      ~f:(fun x ->
+        Logs.info (fun m -> m "%s" x);
+        Lwt_result.return ())
+      body
+    >>= fun () ->
     let resp =
       Response.create
         ~headers:
@@ -42,17 +41,21 @@ let run (sock : Lwt_unix.file_descr) =
              [ ("Content-Length", Int.to_string (Bigstringaf.length text)) ])
         `Ok
     in
-    Lwt.return (resp, `Bigstring text)
+    Lwt_result.return (resp, `Bigstring text)
   in
   Lwt.catch
     (fun () ->
       H1_lwt.run_server ~read_buf_size:(10 * 1024) ~write_buf_size:(10 * 1024)
-        ~write:(fun buf ~pos ~len -> Lwt_bytes.write sock buf pos len)
-        ~refill:(fun buf ~pos ~len -> Lwt_bytes.read sock buf pos len)
+        ~write:(fun buf ~pos ~len ->
+          let%lwt c = Lwt_bytes.write sock buf pos len in
+          Lwt_result.return c)
+        ~refill:(fun buf ~pos ~len ->
+          let%lwt c = Lwt_bytes.read sock buf pos len in
+          Lwt_result.return c)
         service)
     (fun exn ->
       Logs.err (fun m -> m "%s" (Printexc.to_string exn));
-      Lwt.return_unit)
+      Lwt_result.return ())
 ```
 
 Example using async:
@@ -62,11 +65,11 @@ Example using async:
 let run (sock : Fd.t) =
   let service (_req, body) =
     let body = H1_async.Body.to_string_stream body in
-    let%bind () =
+    let%bind.Deferred.Or_error () =
       H1_async.iter
         ~f:(fun x ->
           Logs.info (fun m -> m "%s" x);
-          return ())
+          Deferred.Or_error.return ())
         body
     in
     let resp =
@@ -76,7 +79,7 @@ let run (sock : Fd.t) =
              [ ("Content-Length", Int.to_string (Bigstring.length text)) ])
         `Ok
     in
-    return (resp, `Bigstring text)
+    return (Ok (resp, `Bigstring text))
   in
   H1_async.run_server ~read_buf_size:(10 * 1024) ~write_buf_size:(10 * 1024)
     ~write:(fun buf ~pos ~len -> H1_async.write_nonblock sock buf ~pos ~len)

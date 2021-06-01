@@ -1,19 +1,25 @@
 module IO = struct
   open H1
 
-  type 'a t = 'a Lwt.t
+  type 'a t = ('a, Base.Error.t) Lwt_result.t
 
   let of_cps cps =
     let p, w = Lwt.wait () in
-    Cps.run cps (fun v -> Lwt.wakeup_later w v);
+    Cps.run cps
+      (fun e -> Lwt.wakeup_later w (Error e))
+      (fun v -> Lwt.wakeup_later w (Ok v));
     p
 
   let to_cps p =
-    Cps.make @@ fun finish ->
+    Cps.make @@ fun on_error finish ->
+    let fill = function Ok v -> finish v | Error e -> on_error e in
     match Lwt.state p with
-    | Lwt.Return x -> finish x
-    | Lwt.Sleep -> Lwt.on_any p (fun v -> finish v) (fun exn -> raise exn)
-    | Lwt.Fail exn -> raise exn
+    | Lwt.Return x -> fill x
+    | Lwt.Sleep ->
+        Lwt.on_any p
+          (fun v -> fill v)
+          (fun exn -> on_error (Base.Error.of_exn exn))
+    | Lwt.Fail exn -> on_error (Base.Error.of_exn exn)
 end
 
 include H1.Async (IO)
