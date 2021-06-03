@@ -46,6 +46,7 @@ let run (sock : Fd.t) =
           Deferred.Result.return ())
         body
     in
+    let%bind () = after (Time.Span.millisecond) in
     let resp =
       Response.create
         ~headers:

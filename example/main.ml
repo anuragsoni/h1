@@ -44,6 +44,7 @@ let run (sock : Lwt_unix.file_descr) =
         Lwt_result.return ())
       body
     >>= fun () ->
+    let%lwt () = Lwt_unix.sleep 0.001 in
     let resp =
       Response.create
         ~headers:
