@@ -65,11 +65,11 @@ Example using async:
 let run (sock : Fd.t) =
   let service (_req, body) =
     let body = H1_async.Body.to_string_stream body in
-    let%bind.Deferred.Or_error () =
+    let%bind.Deferred.Result () =
       H1_async.iter
         ~f:(fun x ->
           Logs.info (fun m -> m "%s" x);
-          Deferred.Or_error.return ())
+          Deferred.Result.return ())
         body
     in
     let resp =

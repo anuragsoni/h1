@@ -1,7 +1,7 @@
 module IO = struct
   open H1
 
-  type 'a t = ('a, Base.Error.t) Lwt_result.t
+  type 'a t = ('a, H1.Error.t) Lwt_result.t
 
   let of_cps cps =
     let p, w = Lwt.wait () in
@@ -16,10 +16,8 @@ module IO = struct
     match Lwt.state p with
     | Lwt.Return x -> fill x
     | Lwt.Sleep ->
-        Lwt.on_any p
-          (fun v -> fill v)
-          (fun exn -> on_error (Base.Error.of_exn exn))
-    | Lwt.Fail exn -> on_error (Base.Error.of_exn exn)
+        Lwt.on_any p (fun v -> fill v) (fun exn -> on_error (`Exn exn))
+    | Lwt.Fail exn -> on_error (`Exn exn)
 end
 
 include H1.Async (IO)

@@ -1,6 +1,7 @@
 module Bigbuffer = Bigbuffer
 module Iovec = Iovec
 module Cps = Cps
+module Error = Error
 open H1_types
 
 module type IO = sig

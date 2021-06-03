@@ -86,9 +86,7 @@ let main port =
         (fun _ sock ->
           match%lwt run sock with
           | Ok () -> Lwt.return_unit
-          | Error e ->
-              Logs.err (fun m -> m "%s" (Base.Error.to_string_hum e));
-              Lwt.return_unit)
+          | Error _e -> Lwt.return_unit)
       >>= fun _server -> Lwt.return_unit);
   let forever, _ = Lwt.wait () in
   Lwt_main.run forever

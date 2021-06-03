@@ -1,4 +1,4 @@
-open Cps.Monad_infix
+open Cps.Infix
 open H1_types
 
 module Transport = struct
@@ -53,11 +53,10 @@ let body_stream req bufstream =
                 Cps.return chunk
             | Error Partial -> fn ()
             | Error (Msg msg) ->
-                Cps.fail (Base.Error.createf "Bad Request: %S" msg))
+                Cps.fail (`Msg (Printf.sprintf "Bad Request: %S" msg)))
       in
       Pull.from_fn fn
-  | `Bad_request ->
-      Pull.from_fn (fun () -> Cps.fail (Base.Error.of_string "Bad Request"))
+  | `Bad_request -> Pull.from_fn (fun () -> Cps.fail (`Msg "Bad Request"))
   | `Fixed 0L -> Pull.from_fn (fun () -> Cps.return None)
   | `Fixed len ->
       let to_consume = ref len in
@@ -94,7 +93,8 @@ let request_stream bufstream =
             view.continue consumed;
             let body_stream = body_stream req bufstream in
             Cps.return (Some (req, `Stream body_stream))
-        | Error (Msg msg) -> Cps.fail (Base.Error.createf "Bad Request: %S" msg)
+        | Error (Msg msg) ->
+            Cps.fail (`Msg (Printf.sprintf "Bad Request: %S" msg))
         | Error Partial -> fn ())
   in
   Pull.from_fn fn

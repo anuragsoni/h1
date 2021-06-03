@@ -1,4 +1,4 @@
-open Cps.Monad_infix
+open Cps.Infix
 
 type 'a t = { next : unit -> 'a option Cps.t; pushback : 'a -> unit }
 

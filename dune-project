@@ -39,6 +39,7 @@
    (= :version))
   (h1-parser
    (= :version))
+  logs
   bigstringaf))
 
 (package

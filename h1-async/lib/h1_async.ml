@@ -13,18 +13,14 @@ let rec read_nonblock fd buf ~pos ~len =
   | `Error (Unix.Unix_error ((EWOULDBLOCK | EAGAIN), _, _)) -> (
       Fd.ready_to fd `Read >>= function
       | `Bad_fd ->
-          return
-            (Or_error.error_s
-               [%message "H1_async.read_nonblock: Bad file descriptor"])
+          return (Error (`Msg "H1_async.read_nonblock: Bad file descriptor"))
       | `Closed -> return (Ok 0)
       | `Ready -> read_nonblock fd buf ~pos ~len)
   | `Error (Unix.Unix_error (EBADF, _, _)) ->
-      return
-        (Or_error.error_s
-           [%message "H1_async.read_nonblock: Bad file descriptor"])
+      return (Error (`Msg "H1_async.read_nonblock: Bad file descriptor"))
   | `Error exn ->
       don't_wait_for (Fd.close fd);
-      return (Or_error.of_exn exn)
+      return (Error (`Exn exn))
 
 let rec write_nonblock fd buf ~pos ~len =
   let open Unix.Error in
@@ -37,23 +33,19 @@ let rec write_nonblock fd buf ~pos ~len =
   | `Error (Unix.Unix_error ((EWOULDBLOCK | EAGAIN), _, _)) -> (
       Fd.ready_to fd `Write >>= function
       | `Bad_fd ->
-          return
-            (Or_error.error_s
-               [%message "H1_async.write_nonblock: Bad file descriptor"])
+          return (Error (`Msg "H1_async.write_nonblock: Bad file descriptor"))
       | `Closed -> return (Ok 0)
       | `Ready -> write_nonblock fd buf ~pos ~len)
   | `Error (Unix.Unix_error (EBADF, _, _)) ->
-      return
-        (Or_error.error_s
-           [%message "H1_async.write_nonblock: Bad file descriptor"])
+      return (Error (`Msg "H1_async.write_nonblock: Bad file descriptor"))
   | `Error exn ->
       don't_wait_for (Fd.close fd);
-      return (Or_error.of_exn exn)
+      return (Error (`Exn exn))
 
 module IO = struct
   open H1
 
-  type 'a t = 'a Deferred.Or_error.t
+  type 'a t = ('a, H1.Error.t) Deferred.Result.t
 
   let of_cps cps =
     Deferred.create (fun i ->
