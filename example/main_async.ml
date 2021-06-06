@@ -32,45 +32,41 @@ let text =
    was coming to, but it was too dark to see anything; then she looked at the \
    sides of the well, and noticed that they were filled with cupboards......"
 
-let text = Bigstringaf.of_string text ~off:0 ~len:(String.length text)
+let text = Base_bigstring.of_string text
 
 [@@@part "simple_server"]
 
 let run (sock : Fd.t) =
   let service (_req, body) =
-    let body = H1_async.Body.to_string_stream body in
-    let%bind.Deferred.Result () =
-      H1_async.iter
-        ~f:(fun x ->
-          Logs.info (fun m -> m "%s" x);
-          Deferred.Result.return ())
-        body
+    let%bind () =
+      H1_async.iter_body' body ~f:(fun b -> Log.Global.info "%s" b)
     in
     let resp =
       Response.create
         ~headers:
           (Headers.of_list
-             [ ("Content-Length", Int.to_string (Bigstring.length text)) ])
+             [ ("Content-Length", Int.to_string (Base_bigstring.length text)) ])
         `Ok
     in
-    return (Ok (resp, `Bigstring text))
+    return (resp, `Bigstring text)
   in
-  H1_async.run_server ~read_buf_size:(10 * 1024) ~write_buf_size:(10 * 1024)
-    ~write:(fun buf ~pos ~len -> H1_async.write_nonblock sock buf ~pos ~len)
-    ~refill:(fun buf ~pos ~len -> H1_async.read_nonblock sock buf ~pos ~len)
-    service
+  let conn =
+    H1_async.create sock ~read_buffer_size:(10 * 1024)
+      ~write_buffer_size:(10 * 1024)
+  in
+  H1_async.run conn service
 
 [@@@part "simple_server"]
 
+let log_exn _ exn = Log.Global.error "%s" (Exn.to_string exn)
+
 let run ~port =
   let (server : (Socket.Address.Inet.t, int) Tcp.Server.t) =
-    Tcp.Server.create_sock_inet ~backlog:11_000 ~on_handler_error:`Ignore
-      (Tcp.Where_to_listen.of_port port) (fun _addr sock ->
+    Tcp.Server.create_sock_inet ~backlog:11_000
+      ~on_handler_error:(`Call log_exn) (Tcp.Where_to_listen.of_port port)
+      (fun _addr sock ->
         let fd = Socket.fd sock in
-        run fd >>| function
-        | Ok () -> ()
-        | Error (`Msg m) -> failwith m
-        | Error (`Exn e) -> raise e)
+        run fd)
   in
   Deferred.forever () (fun () ->
       Clock.after Time.Span.(of_sec 0.5) >>| fun () ->

@@ -1,82 +1,81 @@
-(* TODO: Remove this if https://github.com/inhabitedtype/bigstringaf/pulls gets
-   merged. *)
-external unsafe_memchr : Bigstringaf.t -> int -> char -> int -> int
-  = "bigstringaf_memchr"
-  [@@noalloc]
+type bigstring =
+  (char, Bigarray.int8_unsigned_elt, Bigarray.c_layout) Bigarray.Array1.t
 
 module Source = struct
   type t = {
-    buffer : Bigstringaf.t;
-    mutable off : int;
-    min_off : int;
+    buffer : bigstring;
+    mutable pos : int;
+    min_pos : int;
     upper_bound : int;
   }
 
-  let of_bigstring ?off ?len buffer =
-    let buf_len = Bigstringaf.length buffer in
-    let off = Option.value off ~default:0 in
-    if off < 0 || off > buf_len then
+  let of_bigstring ?pos ?len buffer =
+    let buf_len = Base_bigstring.length buffer in
+    let pos = Option.value pos ~default:0 in
+    if pos < 0 || pos > buf_len then
       invalid_arg
         (Printf.sprintf
            "H1_parser.Source.of_bigstring: Invalid offset %d. Buffer length: %d"
-           off buf_len);
-    let len = Option.value len ~default:(buf_len - off) in
-    if len < 0 || off + len > buf_len then
+           pos buf_len);
+    let len = Option.value len ~default:(buf_len - pos) in
+    if len < 0 || pos + len > buf_len then
       invalid_arg
         (Printf.sprintf
            "H1_parse.Source.of_bigstring: Invalid len %d. offset: %d, \
             buffer_length: %d, requested_length: %d"
-           len off buf_len (off + len));
-    { buffer; off; min_off = off; upper_bound = off + len }
+           len pos buf_len (pos + len));
+    { buffer; pos; min_pos = pos; upper_bound = pos + len }
 
   let get t idx =
-    if idx < 0 || t.off + idx >= t.upper_bound then
+    if idx < 0 || t.pos + idx >= t.upper_bound then
       invalid_arg "H1_parser.Source.get: Index out of bounds";
-    Bigstringaf.unsafe_get t.buffer (t.off + idx)
+    Base_bigstring.get t.buffer (t.pos + idx)
 
   let advance t count =
-    if count < 0 || t.off + count > t.upper_bound then
+    if count < 0 || t.pos + count > t.upper_bound then
       invalid_arg
         (Printf.sprintf
            "H1_parser.Source.advance: Index out of bounds. Requested count: %d"
            count);
-    t.off <- t.off + count
+    t.pos <- t.pos + count
 
-  let length t = t.upper_bound - t.off
+  let length t = t.upper_bound - t.pos
 
-  let to_string t ~off ~len =
+  let to_string t ~pos ~len =
     if
-      off < 0
-      || t.off + off >= t.upper_bound
+      pos < 0
+      || t.pos + pos >= t.upper_bound
       || len < 0
-      || t.off + off + len > t.upper_bound
+      || t.pos + pos + len > t.upper_bound
     then
       invalid_arg
         (Format.asprintf
            "H1_parser.Source.substring: Index out of bounds., Requested off: \
             %d, len: %d"
-           off len);
-    Bigstringaf.substring t.buffer ~off:(t.off + off) ~len
+           pos len);
+    Base_bigstring.To_string.sub t.buffer ~pos:(t.pos + pos) ~len
 
-  let consumed t = t.off - t.min_off
+  let consumed t = t.pos - t.min_pos
 
   let index t ch =
-    let res = unsafe_memchr t.buffer t.off ch (length t) in
-    if res = -1 then -1 else res - t.off
+    let res =
+      Base_bigstring.unsafe_find t.buffer ~pos:t.pos ch ~len:(length t)
+    in
+    if res = -1 then -1 else res - t.pos
 
-  let for_all t ~off ~len ~f =
+  let for_all t ~pos ~len ~f =
     if
-      off < 0
-      || t.off + off >= t.upper_bound
+      pos < 0
+      || t.pos + pos >= t.upper_bound
       || len < 0
-      || t.off + off + len > t.upper_bound
+      || t.pos + pos + len > t.upper_bound
     then
       invalid_arg
         (Format.asprintf
            "H1_parser.Source.substring: Index out of bounds. Requested off: \
             %d, len: %d"
-           off len);
-    let idx = ref off in
+           pos len);
+    let idx = ref pos in
     while !idx < len && f (get t !idx) do
       incr idx
     done;
@@ -87,6 +86,9 @@ type error = Msg of string | Partial
 
 type 'a parser = { run : 'r. Source.t -> (error -> 'r) -> ('a -> 'r) -> 'r }
 [@@unboxed]
+
+let return x = { run = (fun _source _on_err on_succ -> on_succ x) }
+let fail msg = { run = (fun _source on_err _on_succ -> on_err (Msg msg)) }
 
 let ( let+ ) t f =
   {
@@ -102,12 +104,22 @@ let ( let* ) t f =
         t.run source on_err (fun v -> (f v).run source on_err on_succ));
   }
 
+let ( >>= ) = ( let* )
+
 let ( and+ ) a b =
   {
     run =
       (fun source on_err on_succ ->
         a.run source on_err (fun res_a ->
             b.run source on_err (fun res_b -> on_succ (res_a, res_b))));
+  }
+
+let ( *> ) a b =
+  {
+    run =
+      (fun source on_err on_succ ->
+        a.run source on_err (fun _res_a ->
+            b.run source on_err (fun res_b -> on_succ res_b)));
   }
 
 let ( <* ) a b =
@@ -122,7 +134,7 @@ let take n =
   let run source on_err on_succ =
     if Source.length source < n then on_err Partial
     else
-      let res = Source.to_string source ~off:0 ~len:n in
+      let res = Source.to_string source ~pos:0 ~len:n in
       Source.advance source n;
       on_succ res
   in
@@ -131,16 +143,27 @@ let take n =
 let string str =
   let run source on_err on_succ =
     let len = String.length str in
-    let rec aux idx =
-      if idx = len then (
-        Source.advance source len;
-        on_succ str)
-      else if Source.length source = 0 then on_err Partial
-      else if Source.get source idx = String.unsafe_get str idx then
-        aux (idx + 1)
-      else on_err (Msg (Printf.sprintf "Could not match: %S" str))
-    in
-    aux 0
+    if Source.length source < len then on_err Partial
+    else
+      let rec aux idx =
+        if idx = len then (
+          Source.advance source len;
+          on_succ str)
+        else if Source.get source idx = String.unsafe_get str idx then
+          aux (idx + 1)
+        else on_err (Msg (Printf.sprintf "Could not match: %S" str))
+      in
+      aux 0
+  in
+  { run }
+
+let any_char =
+  let run source on_err on_succ =
+    if Source.length source = 0 then on_err Partial
+    else
+      let c = Source.get source 0 in
+      Source.advance source 1;
+      on_succ c
   in
   { run }
 
@@ -165,7 +188,7 @@ let token =
     let pos = Source.index source ' ' in
     if pos = -1 then on_err Partial
     else
-      let res = Source.to_string source ~off:0 ~len:pos in
+      let res = Source.to_string source ~pos:0 ~len:pos in
       Source.advance source (pos + 1);
       on_succ res
   in
@@ -181,25 +204,19 @@ let meth =
   { run }
 
 let version =
-  let run source on_err on_succ =
-    if Source.length source < 8 then on_err Partial
-    else if
-      Bigstringaf.unsafe_memcmp_string source.buffer source.off "HTTP/1.1" 0 8
-      = 0
-    then (
-      Source.advance source 8;
-      on_succ H1_types.Version.Http_1_1)
-    else on_err (Msg "Invalid http version")
-  in
-  { run } <* eol
+  string "HTTP/1."
+  *> (any_char >>= function
+      | '1' -> return H1_types.Version.Http_1_1
+      | _ -> fail "Invalid http version")
+  <* eol
 
 let header =
   let run source on_err on_succ =
     let pos = Source.index source ':' in
     if pos = -1 then on_err Partial
     else if pos = 0 then on_err (Msg "Invalid header: Empty header key")
-    else if Source.for_all source ~off:0 ~len:pos ~f:is_tchar then (
-      let key = Source.to_string source ~off:0 ~len:pos in
+    else if Source.for_all source ~pos:0 ~len:pos ~f:is_tchar then (
+      let key = Source.to_string source ~pos:0 ~len:pos in
       Source.advance source (pos + 1);
       while Source.length source > 0 && Source.get source 0 = ' ' do
         Source.advance source 1
@@ -207,7 +224,7 @@ let header =
       let pos = Source.index source '\r' in
       if pos = -1 then on_err Partial
       else
-        let v = Source.to_string source ~off:0 ~len:pos in
+        let v = Source.to_string source ~pos:0 ~len:pos in
         Source.advance source pos;
         on_succ (key, String.trim v))
     else on_err (Msg "Invalid Header Key")
@@ -322,11 +339,11 @@ let parse_chunk =
     let+ res = take (Int64.to_int chunk_length) <* eol in
     Some res
 
-let run_parser ?off ?len buf p =
-  let source = Source.of_bigstring ?off ?len buf in
+let run_parser ?pos ?len buf p =
+  let source = Source.of_bigstring ?pos ?len buf in
   p.run source (fun e -> Error e) (fun v -> Ok (v, Source.consumed source))
 
-let parse_request ?off ?len buf = run_parser ?off ?len buf request
-let parse_headers ?off ?len buf = run_parser ?off ?len buf headers
-let parse_chunk_length ?off ?len buf = run_parser ?off ?len buf chunk_length
-let parse_chunk ?off ?len buf = run_parser ?off ?len buf parse_chunk
+let parse_request ?pos ?len buf = run_parser ?pos ?len buf request
+let parse_headers ?pos ?len buf = run_parser ?pos ?len buf headers
+let parse_chunk_length ?pos ?len buf = run_parser ?pos ?len buf chunk_length
+let parse_chunk ?pos ?len buf = run_parser ?pos ?len buf parse_chunk

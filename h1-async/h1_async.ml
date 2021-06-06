@@ -1,0 +1,204 @@
+open Core
+open Async
+open H1_types
+
+type bigstring =
+  (char, Bigarray.int8_unsigned_elt, Bigarray.c_layout) Bigarray.Array1.t
+
+let set_nonblock fd = Fd.with_file_descr_exn ~nonblocking:true fd ignore
+
+module Read = struct
+  type t = {
+    fd : Fd.t;
+    buf : Bigstring.t;
+    mutable pos : int;
+    mutable pos_unconsumed : int;
+    decoder : H1.Decoder.decoder;
+  }
+
+  let create fd size =
+    set_nonblock fd;
+    let buf = Bigstring.create size in
+    { fd; buf; pos = 0; pos_unconsumed = 0; decoder = H1.Decoder.decoder () }
+
+  let shift t =
+    if t.pos > 0 then (
+      let len = t.pos_unconsumed - t.pos in
+      if len > 0 then
+        Bigstring.blit ~src:t.buf ~src_pos:t.pos ~dst_pos:0 ~len ~dst:t.buf;
+      t.pos <- 0;
+      t.pos_unconsumed <- len)
+
+  let fill_buf t =
+    shift t;
+    let syscall_result =
+      Bigstring_unix.read_assume_fd_is_nonblocking (Fd.file_descr_exn t.fd)
+        t.buf ~pos:t.pos_unconsumed
+        ~len:(Bigstring.length t.buf - t.pos_unconsumed)
+    in
+    if Unix.Syscall_result.Int.is_ok syscall_result then
+      let count = Unix.Syscall_result.Int.ok_exn syscall_result in
+      if count = 0 then `Eof
+      else (
+        t.pos_unconsumed <- t.pos_unconsumed + count;
+        `Ok)
+    else
+      match Unix.Syscall_result.Int.error_exn syscall_result with
+      | EWOULDBLOCK | EAGAIN | EINTR -> `Poll_again
+      | EPIPE | ECONNRESET | EHOSTUNREACH | ENETDOWN | ENETRESET | ENETUNREACH
+      | ETIMEDOUT ->
+          `Eof
+      | err -> raise (Unix.Unix_error (err, "", ""))
+
+  let rec refill t fn =
+    match fill_buf t with
+    | `Ok -> fn `Ok
+    | `Eof -> fn `Eof
+    | `Poll_again -> (
+        Fd.ready_to t.fd `Read >>> function
+        | `Bad_fd | `Closed ->
+            raise_s
+              [%message
+                "H1_async_unix.write_all_pending: Bad file descriptor"
+                  ~fd:(t.fd : Fd.t)]
+        | `Ready -> refill t fn)
+
+  let next_event t =
+    match H1.Decoder.decode t.decoder with
+    | `Need_data as res ->
+        let consumed = H1.Decoder.consumed t.decoder in
+        t.pos <- t.pos + consumed;
+        res
+    | res -> res
+end
+
+module Write = struct
+  type t = { fd : Fd.t; buf : Bytebuffer.t }
+
+  let create fd size =
+    set_nonblock fd;
+    let buf = Bytebuffer.create size in
+    { fd; buf }
+
+  let write t =
+    let consume = Bytebuffer.consume t.buf in
+    match
+      Bigstring_unix.write_assume_fd_is_nonblocking (Fd.file_descr_exn t.fd)
+        consume.Bytebuffer.View.buffer ~pos:consume.pos ~len:consume.len
+    with
+    | count ->
+        consume.continue count;
+        `Ok
+    | exception Unix.Unix_error ((EWOULDBLOCK | EAGAIN | EINTR), _, _) -> `Ok
+    | exception
+        Unix.Unix_error
+          ( ( EPIPE | ECONNRESET | EHOSTUNREACH | ENETDOWN | ENETRESET
+            | ENETUNREACH | ETIMEDOUT ),
+            _,
+            _ ) ->
+        `Eof
+    | exception exn -> raise exn
+
+  let shutdown t = Fd.close t.fd
+
+  let rec write_all_pending t ~f =
+    match write t with
+    | `Eof -> shutdown t >>> f
+    | `Ok -> (
+        if Bytebuffer.length t.buf = 0 then f ()
+        else
+          Fd.ready_to t.fd `Write >>> function
+          | `Ready -> write_all_pending t ~f
+          | `Bad_fd | `Closed ->
+              raise_s
+                [%message
+                  "H1_async_unix.write_all_pending: Bad file descriptor"
+                    ~fd:(t.fd : Fd.t)])
+end
+
+type conn = { read : Read.t; write : Write.t }
+
+let create fd ~read_buffer_size ~write_buffer_size =
+  let read = Read.create fd read_buffer_size in
+  let write = Write.create fd write_buffer_size in
+  { read; write }
+
+let write_body t msg =
+  match msg with
+  | `Bigstring b -> Bytebuffer.add_bigstring t.write.Write.buf b
+  | `String s -> Bytebuffer.add_string t.write.Write.buf s
+
+type body_stream = unit -> string option Deferred.t
+
+let make_body_stream t =
+  let rec fn () =
+    match H1.Decoder.decode t.read.decoder with
+    | `Need_data ->
+        Deferred.create (fun ivar ->
+            Read.refill t.read (function
+              | `Eof -> Ivar.fill_if_empty ivar ()
+              | `Ok ->
+                  H1.Decoder.src t.read.decoder t.read.buf ~pos:t.read.pos
+                    ~len:(t.read.pos_unconsumed - t.read.pos);
+                  Ivar.fill_if_empty ivar ()))
+        >>= fn
+    | `Data s -> return (Some s)
+    | `Error msg -> failwith msg
+    | `Request _ -> failwith "Unexpected payload while parsing body"
+    | `Request_complete -> return None
+  in
+  fn
+
+let rec iter_body t ~f =
+  match%bind t () with
+  | None -> return ()
+  | Some x ->
+      let%bind () = f x in
+      iter_body t ~f
+
+let rec iter_body' t ~f =
+  match%bind t () with
+  | None -> return ()
+  | Some x ->
+      f x;
+      iter_body' t ~f
+
+let rec drain fn =
+  match%bind fn () with None -> return () | Some _ -> drain fn
+
+type service =
+  Request.t * body_stream ->
+  (Response.t * [ `Bigstring of bigstring | `String of string ]) Deferred.t
+
+let run t service =
+  let close = Ivar.create () in
+  let monitor = Monitor.create ~here:[%here] ~name:"H1_async.run_server" () in
+  let rec aux () =
+    match Read.next_event t.read with
+    | `Need_data ->
+        Read.refill t.read (function
+          | `Eof -> Ivar.fill_if_empty close ()
+          | `Ok ->
+              H1.Decoder.src t.read.decoder t.read.buf ~pos:t.read.pos
+                ~len:(t.read.pos_unconsumed - t.read.pos);
+              aux ())
+    | `Error msg -> failwith msg
+    | `Request_complete ->
+        H1.Decoder.next_cycle t.read.decoder;
+        aux ()
+    | `Request req ->
+        let body_stream = make_body_stream t in
+        service (req, body_stream) >>> fun (response, body) ->
+        H1.serialize_response t.write.Write.buf response;
+        write_body t body;
+        Write.write_all_pending t.write ~f:(fun () ->
+            drain body_stream >>> fun () ->
+            H1.Decoder.next_cycle t.read.decoder;
+            aux ())
+    | `Data _ -> assert false
+  in
+  Scheduler.within ~monitor aux;
+  Monitor.detach_and_iter_errors monitor ~f:(fun exn ->
+      Log.Global.error "%s" (Exn.to_string exn);
+      Ivar.fill_if_empty close ());
+  Ivar.read close

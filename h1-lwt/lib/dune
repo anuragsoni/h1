@@ -1,4 +1,6 @@
 (library
  (name h1_lwt)
  (public_name h1-lwt)
- (libraries lwt h1))
+ (preprocess
+  (pps lwt_ppx))
+ (libraries lwt.unix h1 base_bigstring logs))

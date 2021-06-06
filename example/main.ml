@@ -1,5 +1,4 @@
 open H1_types
-open Lwt_result.Infix
 
 let text =
   "CHAPTER I. Down the Rabbit-Hole  Alice was beginning to get very tired of \
@@ -31,41 +30,32 @@ let text =
    was coming to, but it was too dark to see anything; then she looked at the \
    sides of the well, and noticed that they were filled with cupboards......"
 
-let text = Bigstringaf.of_string text ~off:0 ~len:(String.length text)
+let text = Base_bigstring.of_string text
 
 [@@@part "simple_server"]
 
+let rec write_all sock buf ~pos ~len =
+  let%lwt count = Lwt_bytes.write sock buf pos len in
+  if count = len then Lwt.return_unit
+  else write_all sock buf ~pos:(pos + count) ~len:(len - count)
+
 let run (sock : Lwt_unix.file_descr) =
-  let service (_req, body) =
-    let body = H1_lwt.Body.to_string_stream body in
-    H1_lwt.iter
-      ~f:(fun x ->
-        Logs.info (fun m -> m "%s" x);
-        Lwt_result.return ())
-      body
-    >>= fun () ->
+  let service (_req, _body) =
     let resp =
       Response.create
         ~headers:
           (Headers.of_list
-             [ ("Content-Length", Int.to_string (Bigstringaf.length text)) ])
+             [ ("Content-Length", Int.to_string (Base_bigstring.length text)) ])
         `Ok
     in
-    Lwt_result.return (resp, `Bigstring text)
+    Lwt.return (resp, `Bigstring text)
   in
-  Lwt.catch
-    (fun () ->
-      H1_lwt.run_server ~read_buf_size:(10 * 1024) ~write_buf_size:(10 * 1024)
-        ~write:(fun buf ~pos ~len ->
-          let%lwt c = Lwt_bytes.write sock buf pos len in
-          Lwt_result.return c)
-        ~refill:(fun buf ~pos ~len ->
-          let%lwt c = Lwt_bytes.read sock buf pos len in
-          Lwt_result.return c)
-        service)
-    (fun exn ->
-      Logs.err (fun m -> m "%s" (Printexc.to_string exn));
-      Lwt_result.return ())
+  let conn =
+    H1_lwt.create ~read_buffer_size:(10 * 1024) ~write_buffer_size:(10 * 1024)
+      ~read:(fun buf ~pos ~len -> Lwt_bytes.read sock buf pos len)
+      ~write:(write_all sock)
+  in
+  H1_lwt.run conn service
 
 [@@@part "simple_server"]
 
@@ -83,10 +73,7 @@ let main port =
   let open Lwt.Infix in
   Lwt.async (fun () ->
       Lwt_io.establish_server_with_client_socket ~backlog:11_000 listen_address
-        (fun _ sock ->
-          match%lwt run sock with
-          | Ok () -> Lwt.return_unit
-          | Error _e -> Lwt.return_unit)
+        (fun _ sock -> run sock)
       >>= fun _server -> Lwt.return_unit);
   let forever, _ = Lwt.wait () in
   Lwt_main.run forever

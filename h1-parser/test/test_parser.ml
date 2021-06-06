@@ -29,7 +29,7 @@ let pp_parse_result r =
       Fmt.str "%a" pp res
 
 let%expect_test "Can parse single request" =
-  let buf = Bigstringaf.of_string ~off:0 ~len:(String.length req) req in
+  let buf = Base_bigstring.of_string req in
   let res = H1_parser.parse_request buf in
   printf "%s" (pp_parse_result res);
   [%expect
@@ -74,12 +74,8 @@ let more_requests =
    \r\n"
 
 let%expect_test "Can parse starting at an offset within a buffer" =
-  let buf =
-    Bigstringaf.of_string ~off:0
-      ~len:(String.length more_requests)
-      more_requests
-  in
-  let res = H1_parser.parse_request ~off:304 buf in
+  let buf = Base_bigstring.of_string more_requests in
+  let res = H1_parser.parse_request ~pos:304 buf in
   printf "%s" @@ pp_parse_result res;
   [%expect
     {|
@@ -98,8 +94,8 @@ let%expect_test "Can parse starting at an offset within a buffer" =
       "bytes_consumed" = 315 } |}]
 
 let%expect_test "Informs the caller if the buffer contains partial request" =
-  let buf = Bigstringaf.of_string ~off:0 ~len:(String.length req) req in
-  let res = H1_parser.parse_request ~off:0 ~len:50 buf in
+  let buf = Base_bigstring.of_string ~pos:0 ~len:(String.length req) req in
+  let res = H1_parser.parse_request ~pos:0 ~len:50 buf in
   printf "%s" @@ pp_parse_result res;
   [%expect {| Error: Need more input |}]
 
@@ -107,8 +103,8 @@ let%expect_test "Rejects any http version that isn't 1.0 or 1.1" =
   let req =
     "GET / HTTP/1.4\r\nHost: www.kittyhell.com\r\nKeep-Alive: 115\r\n\r\n"
   in
-  let buf = Bigstringaf.of_string req ~off:0 ~len:(String.length req) in
-  let res = H1_parser.parse_request ~off:0 ~len:50 buf in
+  let buf = Base_bigstring.of_string req in
+  let res = H1_parser.parse_request ~pos:0 ~len:50 buf in
   printf "%s" @@ pp_parse_result res;
   [%expect {| Error: Invalid http version |}]
 
@@ -123,11 +119,7 @@ let%expect_test "Parse request and report offset" =
      \r\n\
      foobar"
   in
-  let v =
-    H1_parser.parse_request
-      (Bigstringaf.of_string buf ~off:0 ~len:(String.length buf))
-    |> Result.ok
-  in
+  let v = H1_parser.parse_request (Base_bigstring.of_string buf) |> Result.ok in
   let req, count = Option.value_exn v in
   printf "%s" (Fmt.str "%a" Request.pp req);
   [%expect
@@ -154,7 +146,7 @@ let%test_unit "parse_chunk_length" =
     ~f:(fun num ->
       let payload =
         let s = Printf.sprintf "%Lx\r\n" num in
-        Bigstringaf.of_string ~off:0 ~len:(String.length s) s
+        Base_bigstring.of_string s
       in
       match H1_parser.parse_chunk_length payload with
       | Ok res ->
@@ -166,7 +158,7 @@ let%test_unit "parse_chunk_length" =
 let%test_unit "chunk length parser works with lowercase and uppercase hex \
                digits" =
   let run_test num str =
-    let buf = Bigstringaf.of_string ~off:0 ~len:(String.length str) str in
+    let buf = Base_bigstring.of_string str in
     match H1_parser.parse_chunk_length buf with
     | Ok res ->
         [%test_eq: int64 * int] res
@@ -185,7 +177,7 @@ let%test_unit "chunk length parser works with lowercase and uppercase hex \
 
 let%expect_test "chunk length parser" =
   let run_test str =
-    let buf = Bigstringaf.of_string ~off:0 ~len:(String.length str) str in
+    let buf = Base_bigstring.of_string str in
     match H1_parser.parse_chunk_length buf with
     | Ok (len, off) -> printf "Chunk length: %Ld, offset: %d\n" len off
     | Error Partial -> print_endline "Partial"
@@ -220,7 +212,7 @@ let%expect_test "chunk length parser" =
 
 let%expect_test "Rejects headers with space before colon" =
   let run_test str =
-    let buf = Bigstringaf.of_string ~off:0 ~len:(String.length str) str in
+    let buf = Base_bigstring.of_string str in
     let res = H1_parser.parse_request buf in
     print_endline @@ pp_parse_result res
   in
@@ -250,7 +242,7 @@ let%expect_test "Rejects headers with space before colon" =
 
 let%expect_test "can parse chunked encoded data" =
   let run_test str =
-    let buf = Bigstringaf.of_string str ~off:0 ~len:(String.length str) in
+    let buf = Base_bigstring.of_string str in
     let res =
       match H1_parser.parse_chunk buf with
       | Ok (chunk, len) ->

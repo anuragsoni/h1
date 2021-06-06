@@ -12,6 +12,12 @@
 (license MIT)
 
 (package
+  (name bytebuffer)
+  (depends
+    base_bigstring
+    (ocaml (>= 4.11.0))))
+
+(package
  (name h1-types)
  (depends
   fmt
@@ -23,7 +29,7 @@
  (depends
   (h1-types
    (= :version))
-  bigstringaf
+  base_bigstring
   (ppx_expect :with-test)
   (mdx :with-test)
   (base :with-test)
@@ -40,7 +46,7 @@
   (h1-parser
    (= :version))
   logs
-  bigstringaf))
+  base_bigstring))
 
 (package
  (name h1-lwt)
