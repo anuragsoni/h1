@@ -12,10 +12,11 @@
 (license MIT)
 
 (package
-  (name bytebuffer)
-  (depends
-    base_bigstring
-    (ocaml (>= 4.11.0))))
+ (name bytebuffer)
+ (depends
+  base_bigstring
+  (ocaml
+   (>= 4.11.0))))
 
 (package
  (name h1-types)
@@ -53,7 +54,10 @@
  (depends
   (h1
    (= :version))
-  lwt))
+  lwt
+  base_bigstring
+  logs
+  lwt_ppx))
 
 (package
  (name h1-async)
@@ -62,4 +66,6 @@
    (= :version))
   core
   async
+  (bytebuffer
+   (= :version))
   ppx_jane))

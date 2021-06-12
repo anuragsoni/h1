@@ -8,6 +8,7 @@ depends: [
   "h1" {= version}
   "core"
   "async"
+  "bytebuffer" {= version}
   "ppx_jane"
   "odoc" {with-doc}
 ]

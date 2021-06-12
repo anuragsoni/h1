@@ -7,6 +7,9 @@ depends: [
   "dune" {>= "2.8"}
   "h1" {= version}
   "lwt"
+  "base_bigstring"
+  "logs"
+  "lwt_ppx"
   "odoc" {with-doc}
 ]
 build: [
