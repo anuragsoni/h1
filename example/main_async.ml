@@ -37,10 +37,7 @@ let text = Base_bigstring.of_string text
 [@@@part "simple_server"]
 
 let run (sock : Fd.t) =
-  let service (_req, body) =
-    let%bind () =
-      H1_async.iter_body' body ~f:(fun b -> Log.Global.info "%s" b)
-    in
+  let service (_req, _body) =
     let resp =
       Response.create
         ~headers:

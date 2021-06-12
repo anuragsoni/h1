@@ -49,10 +49,7 @@ Example using async:
 <!-- $MDX file=example/main_async.ml,part=simple_server -->
 ```ocaml
 let run (sock : Fd.t) =
-  let service (_req, body) =
-    let%bind () =
-      H1_async.iter_body' body ~f:(fun b -> Log.Global.info "%s" b)
-    in
+  let service (_req, _body) =
     let resp =
       Response.create
         ~headers:
