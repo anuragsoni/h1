@@ -15,6 +15,7 @@
  (name bytebuffer)
  (depends
   base_bigstring
+  (alcotest :with-test)
   (ocaml
    (>= 4.11.0))))
 

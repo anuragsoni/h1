@@ -1,27 +1,6 @@
 type bigstring =
   (char, Bigarray.int8_unsigned_elt, Bigarray.c_layout) Bigarray.Array1.t
 
-module Iovec = struct
-  type t = { buffer : bigstring; pos : int; len : int }
-
-  let of_bigstring ?pos ?len buffer =
-    let buf_len = Base_bigstring.length buffer in
-    let pos = Option.value pos ~default:0 in
-    if pos < 0 || pos > buf_len then
-      invalid_arg
-        (Printf.sprintf
-           "H1_lwt.IOVec.of_bigstring: Invalid pos %d. Buffer length: %d" pos
-           buf_len);
-    let len = Option.value len ~default:(buf_len - pos) in
-    if len < 0 || pos + len > buf_len then
-      invalid_arg
-        (Printf.sprintf
-           "H1_lwt.IOVec.of_bigstring: Invalid len %d. offset: %d, \
-            buffer_length: %d, requested_length: %d"
-           len pos buf_len (pos + len));
-    { buffer; pos; len }
-end
-
 type t = {
   mutable buffer : bigstring;
   mutable pos : int;
@@ -84,12 +63,25 @@ let fill t =
     ~len:(Base_bigstring.length t.buffer - t.pos)
     (fun count -> t.pos <- t.pos + count)
 
-let add_bigstring buf s =
-  let len = Base_bigstring.length s in
+let add_bigstring buf ?pos ?len s =
+  let buf_len = Base_bigstring.length s in
+  let pos = Option.value pos ~default:0 in
+  if pos < 0 || pos > buf_len then
+    invalid_arg
+      (Printf.sprintf
+         "Bytebuffer.add_bigstring: Invalid pos %d. Buffer length: %d" pos
+         buf_len);
+  let len = Option.value len ~default:(buf_len - pos) in
+  if len < 0 || pos + len > buf_len then
+    invalid_arg
+      (Printf.sprintf
+         "Bytebuffer.add_bigstring: Invalid len %d. offset: %d, buffer_length: \
+          %d, requested_length: %d"
+         len pos buf_len (pos + len));
   let new_pos = buf.pos + len in
   if new_pos > buf.len then resize buf len;
-  Base_bigstring.unsafe_blit ~src:s ~src_pos:0 ~dst:buf.buffer ~dst_pos:buf.pos
-    ~len;
+  Base_bigstring.unsafe_blit ~src:s ~src_pos:pos ~dst:buf.buffer
+    ~dst_pos:buf.pos ~len;
   buf.pos <- new_pos
 
 let unsafe_index ?pos ?len ch t =
@@ -104,14 +96,6 @@ let unsafe_index ?pos ?len ch t =
 let index ?pos ?len ch t =
   let idx = unsafe_index ?pos ?len ch t in
   if idx < 0 then None else Some idx
-
-let add_iovec buf iovec =
-  let len = iovec.Iovec.len in
-  let new_pos = buf.pos + len in
-  if new_pos > buf.len then resize buf len;
-  Base_bigstring.unsafe_blit ~src:iovec.buffer ~src_pos:iovec.pos
-    ~dst:buf.buffer ~dst_pos:buf.pos ~len;
-  buf.pos <- new_pos
 
 let consume t =
   View.make t.buffer ~pos:0 ~len:t.pos (fun count ->
