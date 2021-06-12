@@ -47,7 +47,6 @@
    (= :version))
   (h1-parser
    (= :version))
-  logs
   base_bigstring))
 
 (package

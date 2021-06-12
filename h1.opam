@@ -7,7 +7,6 @@ depends: [
   "dune" {>= "2.8"}
   "h1-types" {= version}
   "h1-parser" {= version}
-  "logs"
   "base_bigstring"
   "odoc" {with-doc}
 ]
