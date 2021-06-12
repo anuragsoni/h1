@@ -8,39 +8,24 @@ type bigstring =
 let set_nonblock fd = Fd.with_file_descr_exn ~nonblocking:true fd ignore
 
 module Read = struct
-  type t = {
-    fd : Fd.t;
-    buf : Bigstring.t;
-    mutable pos : int;
-    mutable pos_unconsumed : int;
-    decoder : H1.Decoder.decoder;
-  }
+  type t = { fd : Fd.t; buf : Bytebuffer.t; decoder : H1.Decoder.decoder }
 
   let create fd size =
     set_nonblock fd;
-    let buf = Bigstring.create size in
-    { fd; buf; pos = 0; pos_unconsumed = 0; decoder = H1.Decoder.decoder () }
-
-  let shift t =
-    if t.pos > 0 then (
-      let len = t.pos_unconsumed - t.pos in
-      if len > 0 then
-        Bigstring.blit ~src:t.buf ~src_pos:t.pos ~dst_pos:0 ~len ~dst:t.buf;
-      t.pos <- 0;
-      t.pos_unconsumed <- len)
+    let buf = Bytebuffer.create size in
+    { fd; buf; decoder = H1.Decoder.decoder () }
 
   let fill_buf t =
-    shift t;
+    let view = Bytebuffer.fill t.buf in
     let syscall_result =
       Bigstring_unix.read_assume_fd_is_nonblocking (Fd.file_descr_exn t.fd)
-        t.buf ~pos:t.pos_unconsumed
-        ~len:(Bigstring.length t.buf - t.pos_unconsumed)
+        view.Bytebuffer.View.buffer ~pos:view.pos ~len:view.len
     in
     if Unix.Syscall_result.Int.is_ok syscall_result then
       let count = Unix.Syscall_result.Int.ok_exn syscall_result in
       if count = 0 then `Eof
       else (
-        t.pos_unconsumed <- t.pos_unconsumed + count;
+        view.continue count;
         `Ok)
     else
       match Unix.Syscall_result.Int.error_exn syscall_result with
@@ -67,7 +52,7 @@ module Read = struct
     match H1.Decoder.decode t.decoder with
     | `Need_data as res ->
         let consumed = H1.Decoder.consumed t.decoder in
-        t.pos <- t.pos + consumed;
+        Bytebuffer.drop t.buf consumed;
         res
     | res -> res
 end
@@ -138,8 +123,9 @@ let make_body_stream t =
             Read.refill t.read (function
               | `Eof -> Ivar.fill_if_empty ivar ()
               | `Ok ->
-                  H1.Decoder.src t.read.decoder t.read.buf ~pos:t.read.pos
-                    ~len:(t.read.pos_unconsumed - t.read.pos);
+                  let view = Bytebuffer.consume t.read.buf in
+                  H1.Decoder.src t.read.decoder view.Bytebuffer.View.buffer
+                    ~pos:view.pos ~len:view.len;
                   Ivar.fill_if_empty ivar ()))
         >>= fn
     | `Data s -> return (Some s)
@@ -179,8 +165,9 @@ let run t service =
         Read.refill t.read (function
           | `Eof -> Ivar.fill_if_empty close ()
           | `Ok ->
-              H1.Decoder.src t.read.decoder t.read.buf ~pos:t.read.pos
-                ~len:(t.read.pos_unconsumed - t.read.pos);
+              let view = Bytebuffer.consume t.read.buf in
+              H1.Decoder.src t.read.decoder view.Bytebuffer.View.buffer
+                ~pos:view.pos ~len:view.len;
               aux ())
     | `Error msg -> failwith msg
     | `Request_complete ->

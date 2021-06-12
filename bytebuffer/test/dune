@@ -1,3 +1,3 @@
 (test
-  (name test_bytebuffer)
-  (libraries bytebuffer alcotest))
+ (name test_bytebuffer)
+ (libraries bytebuffer alcotest))

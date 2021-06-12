@@ -50,16 +50,6 @@
   base_bigstring))
 
 (package
- (name h1-lwt)
- (depends
-  (h1
-   (= :version))
-  lwt
-  base_bigstring
-  logs
-  lwt_ppx))
-
-(package
  (name h1-async)
  (depends
   (h1

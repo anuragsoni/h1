@@ -71,9 +71,6 @@ let run ~port =
   Deferred.never ()
 
 let () =
-  Fmt_tty.setup_std_outputs ();
-  Logs.set_reporter (Logs_fmt.reporter ());
-  Logs.set_level (Some Debug);
   Command.async ~summary:"Start an echo server"
     Command.Let_syntax.(
       let%map_open port =

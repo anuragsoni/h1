@@ -16,34 +16,6 @@ That said, the approach seems to work well and in my initial tests the performan
 
 ### HTTP Server
 
-Example using lwt:
-
-<!-- $MDX file=example/main.ml,part=simple_server -->
-```ocaml
-let rec write_all sock buf ~pos ~len =
-  let%lwt count = Lwt_bytes.write sock buf pos len in
-  if count = len then Lwt.return_unit
-  else write_all sock buf ~pos:(pos + count) ~len:(len - count)
-
-let run (sock : Lwt_unix.file_descr) =
-  let service (_req, _body) =
-    let resp =
-      Response.create
-        ~headers:
-          (Headers.of_list
-             [ ("Content-Length", Int.to_string (Base_bigstring.length text)) ])
-        `Ok
-    in
-    Lwt.return (resp, `Bigstring text)
-  in
-  let conn =
-    H1_lwt.create ~read_buffer_size:(10 * 1024) ~write_buffer_size:(10 * 1024)
-      ~read:(fun buf ~pos ~len -> Lwt_bytes.read sock buf pos len)
-      ~write:(write_all sock)
-  in
-  H1_lwt.run conn service
-```
-
 Example using async:
 
 <!-- $MDX file=example/main_async.ml,part=simple_server -->
