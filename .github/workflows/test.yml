@@ -25,7 +25,6 @@ jobs:
           opam pin add h1-types.dev -n .
           opam pin add h1-parser.dev -n .
           opam pin add h1.dev -n  .
-          opam pin add h1-lwt.dev -n .
           opam pin add h1-async.dev -n .
           opam install -t . --deps-only
       - name: Check build

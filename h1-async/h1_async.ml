@@ -117,7 +117,7 @@ type body_stream = unit -> string option Deferred.t
 
 let make_body_stream t =
   let rec fn () =
-    match H1.Decoder.decode t.read.decoder with
+    match Read.next_event t.read with
     | `Need_data ->
         Deferred.create (fun ivar ->
             Read.refill t.read (function
@@ -131,7 +131,9 @@ let make_body_stream t =
     | `Data s -> return (Some s)
     | `Error msg -> failwith msg
     | `Request _ -> failwith "Unexpected payload while parsing body"
-    | `Request_complete -> return None
+    | `Request_complete ->
+        H1.Decoder.next_cycle t.read.decoder;
+        return None
   in
   fn
 
