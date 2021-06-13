@@ -21,7 +21,8 @@ Example using async:
 <!-- $MDX file=example/main_async.ml,part=simple_server -->
 ```ocaml
 let run (sock : Fd.t) =
-  let service (_req, _body) =
+  let service (req, _body) =
+    let target = Request.path req in
     let resp =
       Response.create
         ~headers:
@@ -29,7 +30,11 @@ let run (sock : Fd.t) =
              [ ("Content-Length", Int.to_string (Base_bigstring.length text)) ])
         `Ok
     in
-    return (resp, `Bigstring text)
+    match target with
+    | "/delay" ->
+        let%map () = after Time.Span.millisecond in
+        (resp, `Bigstring text)
+    | _ -> return (resp, `Bigstring text)
   in
   let conn =
     H1_async.create sock ~read_buffer_size:(10 * 1024)
