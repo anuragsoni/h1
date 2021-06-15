@@ -62,9 +62,9 @@ let run (sock : Fd.t) =
 
 let log_exn _ exn = Log.Global.error "%s" (Exn.to_string exn)
 
-let run ~port =
+let run ~port ~max_accepts_per_batch =
   let (server : (Socket.Address.Inet.t, int) Tcp.Server.t) =
-    Tcp.Server.create_sock_inet ~backlog:11_000
+    Tcp.Server.create_sock_inet ~backlog:11_000 ~max_accepts_per_batch
       ~on_handler_error:(`Call log_exn) (Tcp.Where_to_listen.of_port port)
       (fun _addr sock ->
         let fd = Socket.fd sock in
@@ -82,6 +82,10 @@ let () =
         flag "-port"
           (optional_with_default 8080 int)
           ~doc:" Port to listen on (default 8080)"
+      and max_accepts_per_batch =
+        flag "-accepts"
+          (optional_with_default 1 int)
+          ~doc:" Max connections per accept call"
       in
-      fun () -> run ~port)
+      fun () -> run ~port ~max_accepts_per_batch)
   |> Command.run
