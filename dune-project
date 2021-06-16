@@ -25,7 +25,7 @@
    (>= 4.11.0))))
 
 (package
- (name h1-types)
+ (name h1_types)
  (synopsis "HTTP 1.1 types")
  (depends
   fmt
@@ -33,10 +33,10 @@
    (>= 4.11.0))))
 
 (package
- (name h1-parser)
+ (name h1_parser)
  (synopsis "Parser for HTTP 1.1")
  (depends
-  (h1-types
+  (h1_types
    (= :version))
   base_bigstring
   (base :with-test)
@@ -47,17 +47,7 @@
   (ppx_assert :with-test)))
 
 (package
- (name h1)
- (synopsis "HTTP 1.1 server state machine")
- (depends
-  (h1-types
-   (= :version))
-  (h1-parser
-   (= :version))
-  base_bigstring))
-
-(package
- (name h1-async)
+ (name h1_async)
  (synopsis "Async based http server")
  (depends
   (h1
@@ -67,3 +57,14 @@
   (bytebuffer
    (= :version))
   ppx_jane))
+
+
+(package
+ (name h1)
+ (synopsis "HTTP 1.1 server state machine")
+ (depends
+  (h1_types
+   (= :version))
+  (h1_parser
+   (= :version))
+  base_bigstring))

@@ -1,3 +1,3 @@
 (library
  (public_name h1)
- (libraries h1-parser bytebuffer))
+ (libraries h1_parser bytebuffer))
