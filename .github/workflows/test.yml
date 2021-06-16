@@ -22,6 +22,7 @@ jobs:
           opam-depext-flags: --with-test
       - name: Install deps
         run: |
+          opam pin add bytebuffer.dev -n .
           opam pin add h1-types.dev -n .
           opam pin add h1-parser.dev -n .
           opam pin add h1.dev -n  .
@@ -30,4 +31,4 @@ jobs:
       - name: Check build
         run: opam exec -- dune build @install
       - name: Run Test
-        run: opam exec -- dune runtest
+        run: opam exec -- dune runtest -f

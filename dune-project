@@ -1,7 +1,5 @@
 (lang dune 2.8)
 
-(using mdx 0.1)
-
 (name h1)
 
 (generate_opam_files true)
@@ -32,11 +30,10 @@
   (h1-types
    (= :version))
   base_bigstring
-  (ppx_expect :with-test)
-  (mdx :with-test)
   (base :with-test)
-  (stdio :with-test)
   (ppx_sexp_conv :with-test)
+  (ppx_compare :with-test)
+  (ppx_here :with-test)
   (base_quickcheck :with-test)
   (ppx_assert :with-test)))
 
