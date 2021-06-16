@@ -25,14 +25,6 @@
    (>= 4.11.0))))
 
 (package
- (name h1_types)
- (synopsis "HTTP 1.1 types")
- (depends
-  fmt
-  (ocaml
-   (>= 4.11.0))))
-
-(package
  (name h1_parser)
  (synopsis "Parser for HTTP 1.1")
  (depends

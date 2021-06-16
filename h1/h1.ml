@@ -1,5 +1,3 @@
-open H1_types
-
 type bigstring =
   (char, Bigarray.int8_unsigned_elt, Bigarray.c_layout) Bigarray.Array1.t
 
@@ -44,7 +42,7 @@ end
 
 module Decoder = struct
   type event =
-    [ `Request of Request.t
+    [ `Request of Cohttp.Request.t
     | `Data of string
     | `Need_data
     | `Error of string
@@ -57,9 +55,10 @@ module Decoder = struct
   let close t = t.source <- Bufview.empty ()
 
   let parse_body req =
-    match Headers.get_transfer_encoding (Request.headers req) with
-    | `Bad_request -> fun _ -> `Error "Could not determine transfer encoding"
-    | `Chunked ->
+    match Cohttp.Request.encoding req with
+    | Cohttp.Transfer.Unknown ->
+        fun _ -> `Error "Could not determine transfer encoding"
+    | Cohttp.Transfer.Chunked ->
         fun t ->
           Bufview.consume t.source (fun buffer ~pos ~len ->
               match H1_parser.parse_chunk buffer ~pos ~len with
@@ -69,11 +68,11 @@ module Decoder = struct
               | Ok (Some chunk, count) -> (count, `Data chunk)
               | Error Partial -> (0, `Need_data)
               | Error (Msg msg) -> (0, `Error msg))
-    | `Fixed 0L ->
+    | Cohttp.Transfer.Fixed 0L ->
         fun t ->
           t.cont <- (fun _ -> `Request_complete);
           `Request_complete
-    | `Fixed len ->
+    | Cohttp.Transfer.Fixed len ->
         let remaining = ref len in
         fun t ->
           if !remaining = 0L then `Request_complete
@@ -105,17 +104,22 @@ module Decoder = struct
 end
 
 let serialize_response buf resp =
-  Bytebuffer.add_string buf (Version.to_string @@ Response.version resp);
+  let version = function
+    | `HTTP_1_1 -> "HTTP/1.1"
+    | `HTTP_1_0 -> "HTTP/1.0"
+    | `Other _ -> assert false
+  in
+  Bytebuffer.add_string buf (version (Cohttp.Response.version resp));
   Bytebuffer.add_char buf ' ';
-  Bytebuffer.add_string buf (Status.to_string @@ Response.status resp);
-  Bytebuffer.add_char buf ' ';
-  Bytebuffer.add_string buf @@ Response.reason_phrase resp;
+  Bytebuffer.add_string buf
+    (Cohttp.Code.string_of_status @@ Cohttp.Response.status resp);
   Bytebuffer.add_string buf "\r\n";
-  Headers.iteri
-    ~f:(fun ~key ~data ->
-      Bytebuffer.add_string buf key;
-      Bytebuffer.add_string buf ": ";
-      Bytebuffer.add_string buf data;
-      Bytebuffer.add_string buf "\r\n")
-    (Response.headers resp);
+  Cohttp.Header.iter
+    (fun key ds ->
+      ListLabels.iter ds ~f:(fun data ->
+          Bytebuffer.add_string buf key;
+          Bytebuffer.add_string buf ": ";
+          Bytebuffer.add_string buf data;
+          Bytebuffer.add_string buf "\r\n"))
+    (Cohttp.Response.headers resp);
   Bytebuffer.add_string buf "\r\n"

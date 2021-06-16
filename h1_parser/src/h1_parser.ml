@@ -195,18 +195,14 @@ let token =
   { run }
 
 let meth =
-  let run source on_err on_succ =
-    token.run source on_err (fun token ->
-        match H1_types.Meth.of_string token with
-        | None -> on_err (Msg "Invalid http verb")
-        | Some m -> on_succ m)
-  in
-  { run }
+  let+ token = token in
+  Cohttp.Code.method_of_string token
 
 let version =
   string "HTTP/1."
   *> (any_char >>= function
-      | '1' -> return H1_types.Version.Http_1_1
+      | '1' -> return `HTTP_1_1
+      | '0' -> return `HTTP_1_0
       | _ -> fail "Invalid http version")
   <* eol
 
@@ -236,8 +232,7 @@ let headers =
     let rec loop acc =
       let len = Source.length source in
       if len > 0 && Source.get source 0 = '\r' then
-        eol.run source on_err (fun _ ->
-            on_succ (H1_types.Headers.of_list @@ List.rev acc))
+        eol.run source on_err (fun _ -> on_succ (Cohttp.Header.of_list acc))
       else
         match header.run source (fun e -> Error e) (fun v -> Ok v) with
         | Error e -> on_err e
@@ -326,9 +321,24 @@ let chunk_length =
 
   { run }
 
+let guess_encoding ?(encoding = Cohttp.Transfer.Fixed Int64.zero) headers =
+  match Cohttp.Header.get_transfer_encoding headers with
+  | Cohttp.Transfer.(Chunked | Fixed _) as enc -> enc
+  | Unknown -> encoding
+
 let request =
-  let+ meth = meth and+ path = token and+ v = version and+ headers = headers in
-  H1_types.Request.create ~version:v ~headers meth path
+  let+ meth = meth
+  and+ path = token
+  and+ version = version
+  and+ headers = headers in
+  {
+    Cohttp.Request.headers;
+    meth;
+    scheme = None;
+    resource = path;
+    version;
+    encoding = guess_encoding headers;
+  }
 
 let parse_chunk =
   let* chunk_length = chunk_length in

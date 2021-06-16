@@ -4,10 +4,10 @@ type bigstring =
 type error = Msg of string | Partial
 
 val parse_headers :
-  ?pos:int -> ?len:int -> bigstring -> (H1_types.Headers.t * int, error) result
+  ?pos:int -> ?len:int -> bigstring -> (Cohttp.Header.t * int, error) result
 
 val parse_request :
-  ?pos:int -> ?len:int -> bigstring -> (H1_types.Request.t * int, error) result
+  ?pos:int -> ?len:int -> bigstring -> (Cohttp.Request.t * int, error) result
 (** Attempts to parse a buffer into a HTTP request. If successful, it returns
     the parsed request and an offset value that indicates the starting point of
     unconsumed content left in the buffer. *)

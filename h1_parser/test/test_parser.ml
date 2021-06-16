@@ -1,5 +1,4 @@
 open Base
-open H1_types
 
 let req =
   "GET /wp-content/uploads/2010/03/hello-kitty-darth-vader-pink.jpg HTTP/1.1\r\n\
@@ -26,20 +25,30 @@ let assert_req_success ~here ~expected_req ~expected_consumed ?pos ?len buf =
     | Ok res -> res
   in
   [%test_result: string] ~here ~message:"HTTP Method mismatch"
-    ~expect:(Meth.to_string @@ Request.meth expected_req)
-    (Meth.to_string @@ Request.meth req);
+    ~expect:(Cohttp.Code.string_of_method @@ Cohttp.Request.meth expected_req)
+    (Cohttp.Code.string_of_method @@ Cohttp.Request.meth req);
   [%test_result: string] ~here ~message:"path mismatch"
-    ~expect:(Request.path expected_req)
-    (Request.path req);
+    ~expect:(Cohttp.Request.resource expected_req)
+    (Cohttp.Request.resource req);
   [%test_result: (string * string) list] ~here ~message:"header mismatch"
-    ~expect:(Headers.to_list @@ Request.headers expected_req)
-    (Headers.to_list @@ Request.headers req);
+    ~expect:(Cohttp.Header.to_list @@ Cohttp.Request.headers expected_req)
+    (Cohttp.Header.to_list @@ Cohttp.Request.headers req);
   [%test_result: int] ~here ~expect:expected_consumed consumed
 
+let make_req ~headers ?(encoding = Cohttp.Transfer.Fixed 0L) meth resource =
+  {
+    Cohttp.Request.headers;
+    meth;
+    resource;
+    scheme = None;
+    encoding;
+    version = `HTTP_1_1;
+  }
+
 let req_expected =
-  Request.create `GET
+  make_req
     ~headers:
-      (Headers.of_list
+      (Cohttp.Header.of_list
          [
            ("Host", "www.kittyhell.com");
            ( "User-Agent",
@@ -59,7 +68,7 @@ let req_expected =
               __utmz=xxxxxxxxx.xxxxxxxxxx.x.x.utmccn=(referral)|utmcsr=reader.livedoor.com|utmcct=/reader/|utmcmd=referral"
            );
          ])
-    "/wp-content/uploads/2010/03/hello-kitty-darth-vader-pink.jpg"
+    `GET "/wp-content/uploads/2010/03/hello-kitty-darth-vader-pink.jpg"
 
 let parse_single_request () =
   assert_req_success ~here:[ [%here] ] ~expected_req:req_expected
@@ -96,9 +105,9 @@ let more_requests =
 
 let parse_at_offset () =
   let expected_req =
-    Request.create
+    make_req
       ~headers:
-        (Headers.of_list
+        (Cohttp.Header.of_list
            [
              ("Host", "www.redditstatic.com");
              ( "User-Agent",
