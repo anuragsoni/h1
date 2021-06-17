@@ -1,4 +1,0 @@
-(library
- (name h1_parser)
- (public_name h1-parser)
- (libraries base_bigstring h1-types))

@@ -1,11 +1,9 @@
-open H1_types
-
 type bigstring =
   (char, Bigarray.int8_unsigned_elt, Bigarray.c_layout) Bigarray.Array1.t
 
 module Decoder : sig
   type event =
-    [ `Request of Request.t
+    [ `Request of Cohttp.Request.t
     | `Data of string
     | `Need_data
     | `Error of string
@@ -21,4 +19,4 @@ module Decoder : sig
   val next_cycle : decoder -> unit
 end
 
-val serialize_response : Bytebuffer.t -> Response.t -> unit
+val serialize_response : Bytebuffer.t -> Cohttp.Response.t -> unit

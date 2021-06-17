@@ -7,10 +7,11 @@ jobs:
     name: Build
     runs-on: ${{ matrix.os }}
     strategy:
-      fail-fast: false
+      fail-fast: true
       matrix:
         os: [ ubuntu-latest ]
         ocaml-compiler:
+          - 4.11.x
           - 4.12.x
     steps:
       - uses: actions/checkout@v2
@@ -23,12 +24,11 @@ jobs:
       - name: Install deps
         run: |
           opam pin add bytebuffer.dev -n .
-          opam pin add h1-types.dev -n .
-          opam pin add h1-parser.dev -n .
+          opam pin add h1_parser.dev -n .
           opam pin add h1.dev -n  .
-          opam pin add h1-async.dev -n .
+          opam pin add h1_async.dev -n .
           opam install -t . --deps-only
       - name: Check build
         run: opam exec -- dune build @install
       - name: Run Test
-        run: opam exec -- dune runtest -f
+        run: opam exec -- dune runtest

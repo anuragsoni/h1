@@ -25,19 +25,13 @@
    (>= 4.11.0))))
 
 (package
- (name h1-types)
- (synopsis "HTTP 1.1 types")
- (depends
-  fmt
-  (ocaml
-   (>= 4.11.0))))
-
-(package
- (name h1-parser)
+ (name h1_parser)
  (synopsis "Parser for HTTP 1.1")
  (depends
-  (h1-types
-   (= :version))
+  (ocaml
+   (>= 4.11.0))
+  (cohttp
+   (>= 4.0.0))
   base_bigstring
   (base :with-test)
   (ppx_sexp_conv :with-test)
@@ -47,19 +41,11 @@
   (ppx_assert :with-test)))
 
 (package
- (name h1)
- (synopsis "HTTP 1.1 server state machine")
- (depends
-  (h1-types
-   (= :version))
-  (h1-parser
-   (= :version))
-  base_bigstring))
-
-(package
- (name h1-async)
+ (name h1_async)
  (synopsis "Async based http server")
  (depends
+  (ocaml
+   (>= 4.11.0))
   (h1
    (= :version))
   core
@@ -67,3 +53,13 @@
   (bytebuffer
    (= :version))
   ppx_jane))
+
+(package
+ (name h1)
+ (synopsis "HTTP 1.1 server state machine")
+ (depends
+  (ocaml
+   (>= 4.11.0))
+  (h1_parser
+   (= :version))
+  base_bigstring))

@@ -1,5 +1,0 @@
-(library
- (name h1_types)
- (public_name h1-types)
- (preprocess (pps ppx_sexp_conv ppx_compare))
- (libraries fmt))

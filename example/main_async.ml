@@ -1,6 +1,5 @@
 open Core
 open Async
-open H1_types
 
 let text =
   "CHAPTER I. Down the Rabbit-Hole  Alice was beginning to get very tired of \
@@ -38,13 +37,13 @@ let text = Base_bigstring.of_string text
 
 let run (sock : Fd.t) =
   let service (req, _body) =
-    let target = Request.path req in
+    let target = Cohttp.Request.resource req in
     let resp =
-      Response.create
+      Cohttp.Response.make
         ~headers:
-          (Headers.of_list
+          (Cohttp.Header.of_list
              [ ("Content-Length", Int.to_string (Base_bigstring.length text)) ])
-        `Ok
+        ~status:`OK ()
     in
     match target with
     | "/delay" ->

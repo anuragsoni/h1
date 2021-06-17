@@ -1,6 +1,0 @@
-(test
-  (name test_parser)
-  (package h1-parser)
-  (preprocess
-    (pps ppx_sexp_conv base_quickcheck.ppx_quickcheck ppx_assert ppx_compare ppx_here))
-  (libraries h1-parser base base_quickcheck alcotest))

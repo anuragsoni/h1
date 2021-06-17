@@ -1,6 +1,5 @@
 open Core
 open Async
-open H1_types
 
 type bigstring =
   (char, Bigarray.int8_unsigned_elt, Bigarray.c_layout) Bigarray.Array1.t
@@ -155,8 +154,9 @@ let rec drain fn =
   match%bind fn () with None -> return () | Some _ -> drain fn
 
 type service =
-  Request.t * body_stream ->
-  (Response.t * [ `Bigstring of bigstring | `String of string ]) Deferred.t
+  Cohttp.Request.t * body_stream ->
+  (Cohttp.Response.t * [ `Bigstring of bigstring | `String of string ])
+  Deferred.t
 
 let run t service =
   let close = Ivar.create () in
