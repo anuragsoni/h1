@@ -23,12 +23,11 @@ jobs:
       - name: Install deps
         run: |
           opam pin add bytebuffer.dev -n .
-          opam pin add h1-types.dev -n .
-          opam pin add h1-parser.dev -n .
+          opam pin add h1_parser.dev -n .
           opam pin add h1.dev -n  .
-          opam pin add h1-async.dev -n .
+          opam pin add h1_async.dev -n .
           opam install -t . --deps-only
       - name: Check build
         run: opam exec -- dune build @install
       - name: Run Test
-        run: opam exec -- dune runtest -f
+        run: opam exec -- dune runtest
