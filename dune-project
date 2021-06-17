@@ -28,7 +28,10 @@
  (name h1_parser)
  (synopsis "Parser for HTTP 1.1")
  (depends
-  cohttp
+  (ocaml
+   (>= 4.11.0))
+  (cohttp
+   (>= 4.0.0))
   base_bigstring
   (base :with-test)
   (ppx_sexp_conv :with-test)
@@ -41,6 +44,8 @@
  (name h1_async)
  (synopsis "Async based http server")
  (depends
+  (ocaml
+   (>= 4.11.0))
   (h1
    (= :version))
   core
@@ -53,6 +58,8 @@
  (name h1)
  (synopsis "HTTP 1.1 server state machine")
  (depends
+  (ocaml
+   (>= 4.11.0))
   (h1_parser
    (= :version))
   base_bigstring))
