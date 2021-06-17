@@ -34,6 +34,7 @@
    (>= 4.0.0))
   base_bigstring
   (base :with-test)
+  (alcotest :with-test)
   (ppx_sexp_conv :with-test)
   (ppx_compare :with-test)
   (ppx_here :with-test)
