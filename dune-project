@@ -28,8 +28,7 @@
  (name h1_parser)
  (synopsis "Parser for HTTP 1.1")
  (depends
-  (h1_types
-   (= :version))
+  cohttp
   base_bigstring
   (base :with-test)
   (ppx_sexp_conv :with-test)
@@ -54,8 +53,6 @@
  (name h1)
  (synopsis "HTTP 1.1 server state machine")
  (depends
-  (h1_types
-   (= :version))
   (h1_parser
    (= :version))
   base_bigstring))
