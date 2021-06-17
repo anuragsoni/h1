@@ -50,7 +50,6 @@
    (= :version))
   ppx_jane))
 
-
 (package
  (name h1)
  (synopsis "HTTP 1.1 server state machine")
