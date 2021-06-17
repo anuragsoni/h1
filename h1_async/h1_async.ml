@@ -115,24 +115,28 @@ let write_body t msg =
 type body_stream = unit -> string option Deferred.t
 
 let make_body_stream t =
+  let closed = ref false in
   let rec fn () =
-    match Read.next_event t.read with
-    | `Need_data ->
-        Deferred.create (fun ivar ->
-            Read.refill t.read (function
-              | `Eof -> Ivar.fill_if_empty ivar ()
-              | `Ok ->
-                  let view = Bytebuffer.consume t.read.buf in
-                  H1.Decoder.src t.read.decoder view.Bytebuffer.View.buffer
-                    ~pos:view.pos ~len:view.len;
-                  Ivar.fill_if_empty ivar ()))
-        >>= fn
-    | `Data s -> return (Some s)
-    | `Error msg -> failwith msg
-    | `Request _ -> failwith "Unexpected payload while parsing body"
-    | `Request_complete ->
-        H1.Decoder.next_cycle t.read.decoder;
-        return None
+    if !closed then return None
+    else
+      match Read.next_event t.read with
+      | `Need_data ->
+          Deferred.create (fun ivar ->
+              Read.refill t.read (function
+                | `Eof -> Ivar.fill_if_empty ivar ()
+                | `Ok ->
+                    let view = Bytebuffer.consume t.read.buf in
+                    H1.Decoder.src t.read.decoder view.Bytebuffer.View.buffer
+                      ~pos:view.pos ~len:view.len;
+                    Ivar.fill_if_empty ivar ()))
+          >>= fn
+      | `Data s -> return (Some s)
+      | `Error msg -> failwith msg
+      | `Request _ -> failwith "Unexpected payload while parsing body"
+      | `Request_complete ->
+          closed := true;
+          H1.Decoder.next_cycle t.read.decoder;
+          return None
   in
   fn
 
