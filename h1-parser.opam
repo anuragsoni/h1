@@ -6,8 +6,14 @@ bug-reports: "https://github.com/anuragsoni/h1/issues"
 depends: [
   "dune" {>= "2.8"}
   "h1-types" {= version}
-  "h1-parser" {= version}
   "bigstringaf"
+  "ppx_expect" {with-test}
+  "mdx" {with-test}
+  "base" {with-test}
+  "stdio" {with-test}
+  "ppx_sexp_conv" {with-test}
+  "base_quickcheck" {with-test}
+  "ppx_assert" {with-test}
   "odoc" {with-doc}
 ]
 build: [

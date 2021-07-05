@@ -1,5 +1,3 @@
-open Core
-open Async
 open H1_types
 
 let text =
@@ -36,54 +34,59 @@ let text = Bigstringaf.of_string text ~off:0 ~len:(String.length text)
 
 [@@@part "simple_server"]
 
-let run (sock : Fd.t) =
+let run (sock : Lwt_unix.file_descr) =
   let service (_req, body) =
-    let body = H1_async.Body.to_string_stream body in
-    let%bind () =
-      H1_async.iter
+    let body = H1_lwt.Body.to_string_stream body in
+    let%lwt () =
+      H1_lwt.iter
         ~f:(fun x ->
           Logs.info (fun m -> m "%s" x);
-          return ())
+          Lwt.return_unit)
         body
     in
     let resp =
       Response.create
         ~headers:
           (Headers.of_list
-             [ ("Content-Length", Int.to_string (Bigstring.length text)) ])
+             [ ("Content-Length", Int.to_string (Bigstringaf.length text)) ])
         `Ok
     in
-    return (resp, `Bigstring text)
+    Lwt.return (resp, `Bigstring text)
   in
-  H1_async.run_server ~read_buf_size:(10 * 1024) ~write_buf_size:(10 * 1024)
-    ~write:(fun buf ~pos ~len -> H1_async.write_nonblock sock buf ~pos ~len)
-    ~refill:(fun buf ~pos ~len -> H1_async.read_nonblock sock buf ~pos ~len)
-    service
+  Lwt.catch
+    (fun () ->
+      H1_lwt.run_server ~read_buf_size:(10 * 1024) ~write_buf_size:(10 * 1024)
+        ~write:(fun buf ~pos ~len -> Lwt_bytes.write sock buf pos len)
+        ~refill:(fun buf ~pos ~len -> Lwt_bytes.read sock buf pos len)
+        service)
+    (fun exn ->
+      Logs.err (fun m -> m "%s" (Printexc.to_string exn));
+      Lwt.return_unit)
 
 [@@@part "simple_server"]
 
-let run ~port =
-  let (server : (Socket.Address.Inet.t, int) Tcp.Server.t) =
-    Tcp.Server.create_sock_inet ~backlog:11_000 ~on_handler_error:`Ignore
-      (Tcp.Where_to_listen.of_port port) (fun _addr sock ->
-        let fd = Socket.fd sock in
-        run fd)
+let main port =
+  let rec log_stats () =
+    let stat = Gc.stat () in
+    Logs.info (fun m ->
+        m "Major collections: %d, Minor collections: %d" stat.major_collections
+          stat.minor_collections);
+    let%lwt () = Lwt_unix.sleep 5. in
+    log_stats ()
   in
-  Deferred.forever () (fun () ->
-      Clock.after Time.Span.(of_sec 0.5) >>| fun () ->
-      Log.Global.printf "conns: %d" (Tcp.Server.num_connections server));
-  Deferred.never ()
+  Lwt.async log_stats;
+  let open Lwt.Infix in
+  let listen_address = Unix.(ADDR_INET (inet_addr_loopback, port)) in
+  Lwt.async (fun () ->
+      Lwt_io.establish_server_with_client_socket ~backlog:11_000 listen_address
+        (fun _ sock -> run sock)
+      >>= fun _server -> Lwt.return_unit);
+  let forever, _ = Lwt.wait () in
+  Lwt_main.run forever
 
 let () =
+  Printexc.record_backtrace true;
   Fmt_tty.setup_std_outputs ();
   Logs.set_reporter (Logs_fmt.reporter ());
   Logs.set_level (Some Debug);
-  Command.async ~summary:"Start an echo server"
-    Command.Let_syntax.(
-      let%map_open port =
-        flag "-port"
-          (optional_with_default 8080 int)
-          ~doc:" Port to listen on (default 8080)"
-      in
-      fun () -> run ~port)
-  |> Command.run
+  Lwt_main.run (main 8080)

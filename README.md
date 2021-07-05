@@ -8,39 +8,80 @@ and as a result it is possible to provide small translation modules that can pro
 This is currently a proof-of-concept. There are many rough edges and probably many bugs. Use it at your own risk.
 That said, the approach seems to work well and in my initial tests the performance seems pretty decent. With some more effort it should be possible to get to a respectable state with extensive tests.
 
-## Features/Goals
+## Features
 * Asynchronous pull based design
-* No I/O in the core library. Use it with any I/O paradigm (async, sync, threaded, etc)
+* Execution environment agnostic.
+    * The library should work on unix, windows and mirageOS, just provide the following functions when creating a connection:
+        ```ocaml
+        write:(Bigstringaf.t -> pos:int -> len:int -> int promise)
+        refill:(Bigstringaf.t -> pos:int -> len:int -> int promise)
+        ```
 
 ## Usage
 
 ### HTTP Server
+
+Example using lwt:
+
+<!-- $MDX file=example/main.ml,part=simple_server -->
+```ocaml
+let run (sock : Lwt_unix.file_descr) =
+  let service (_req, body) =
+    let body = H1_lwt.Body.to_string_stream body in
+    let%lwt () =
+      H1_lwt.iter
+        ~f:(fun x ->
+          Logs.info (fun m -> m "%s" x);
+          Lwt.return_unit)
+        body
+    in
+    let resp =
+      Response.create
+        ~headers:
+          (Headers.of_list
+             [ ("Content-Length", Int.to_string (Bigstringaf.length text)) ])
+        `Ok
+    in
+    Lwt.return (resp, `Bigstring text)
+  in
+  Lwt.catch
+    (fun () ->
+      H1_lwt.run_server ~read_buf_size:(10 * 1024) ~write_buf_size:(10 * 1024)
+        ~write:(fun buf ~pos ~len -> Lwt_bytes.write sock buf pos len)
+        ~refill:(fun buf ~pos ~len -> Lwt_bytes.read sock buf pos len)
+        service)
+    (fun exn ->
+      Logs.err (fun m -> m "%s" (Printexc.to_string exn));
+      Lwt.return_unit)
+```
 
 Example using async:
 
 <!-- $MDX file=example/main_async.ml,part=simple_server -->
 ```ocaml
 let run (sock : Fd.t) =
-  let service (req, _body) =
-    let target = Request.path req in
+  let service (_req, body) =
+    let body = H1_async.Body.to_string_stream body in
+    let%bind () =
+      H1_async.iter
+        ~f:(fun x ->
+          Logs.info (fun m -> m "%s" x);
+          return ())
+        body
+    in
     let resp =
       Response.create
         ~headers:
           (Headers.of_list
-             [ ("Content-Length", Int.to_string (Base_bigstring.length text)) ])
+             [ ("Content-Length", Int.to_string (Bigstring.length text)) ])
         `Ok
     in
-    match target with
-    | "/delay" ->
-        let%map () = after Time.Span.millisecond in
-        (resp, `Bigstring text)
-    | _ -> return (resp, `Bigstring text)
+    return (resp, `Bigstring text)
   in
-  let conn =
-    H1_async.create sock ~read_buffer_size:(10 * 1024)
-      ~write_buffer_size:(10 * 1024)
-  in
-  H1_async.run conn service
+  H1_async.run_server ~read_buf_size:(10 * 1024) ~write_buf_size:(10 * 1024)
+    ~write:(fun buf ~pos ~len -> H1_async.write_nonblock sock buf ~pos ~len)
+    ~refill:(fun buf ~pos ~len -> H1_async.read_nonblock sock buf ~pos ~len)
+    service
 ```
 
 ## Todo

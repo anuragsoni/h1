@@ -5,9 +5,8 @@ homepage: "https://github.com/anuragsoni/h1"
 bug-reports: "https://github.com/anuragsoni/h1/issues"
 depends: [
   "dune" {>= "2.8"}
-  "h1-types" {= version}
-  "h1-parser" {= version}
-  "bigstringaf"
+  "fmt"
+  "ocaml" {>= "4.11.0"}
   "odoc" {with-doc}
 ]
 build: [

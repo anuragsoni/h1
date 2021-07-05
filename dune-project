@@ -1,14 +1,10 @@
 (lang dune 2.8)
 
+(using mdx 0.1)
+
 (name h1)
 
-(authors "Anurag Soni")
-
-(maintainers "Anurag Soni <anurag@sonianurag.com>")
-
 (generate_opam_files true)
-
-(documentation "https://anuragsoni.github.io/h1")
 
 (source
  (github anuragsoni/h1))
@@ -16,51 +12,47 @@
 (license MIT)
 
 (package
- (name bytebuffer)
- (synopsis "Extensible buffers built on top of bigarrays")
+ (name h1-types)
  (depends
-  base_bigstring
-  (alcotest :with-test)
+  fmt
   (ocaml
    (>= 4.11.0))))
 
 (package
- (name h1_parser)
- (synopsis "Parser for HTTP 1.1")
+ (name h1-parser)
  (depends
-  (ocaml
-   (>= 4.11.0))
-  (cohttp
-   (>= 4.0.0))
-  base_bigstring
+  (h1-types
+   (= :version))
+  bigstringaf
+  (ppx_expect :with-test)
+  (mdx :with-test)
   (base :with-test)
-  (alcotest :with-test)
+  (stdio :with-test)
   (ppx_sexp_conv :with-test)
-  (ppx_compare :with-test)
-  (ppx_here :with-test)
   (base_quickcheck :with-test)
   (ppx_assert :with-test)))
 
 (package
- (name h1_async)
- (synopsis "Async based http server")
+ (name h1)
  (depends
-  (ocaml
-   (>= 4.11.0))
+  (h1-types
+   (= :version))
+  (h1-parser
+   (= :version))
+  bigstringaf))
+
+(package
+ (name h1-lwt)
+ (depends
+  (h1
+   (= :version))
+  lwt))
+
+(package
+ (name h1-async)
+ (depends
   (h1
    (= :version))
   core
   async
-  (bytebuffer
-   (= :version))
   ppx_jane))
-
-(package
- (name h1)
- (synopsis "HTTP 1.1 server state machine")
- (depends
-  (ocaml
-   (>= 4.11.0))
-  (h1_parser
-   (= :version))
-  base_bigstring))
